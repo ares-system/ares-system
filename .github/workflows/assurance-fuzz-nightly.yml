@@ -1,0 +1,29 @@
+# Optional nightly: property/fuzz tests for SARIF merge (fast-check). On: workflow_dispatch only by default.
+
+name: Assurance fuzz (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: deepagentsjs
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.29.2
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version-file: deepagentsjs/.nvmrc
+          cache: pnpm
+          cache-dependency-path: deepagentsjs/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Fast-check SARIF merge
+        run: pnpm --filter "@asst/assurance-run" exec vitest run src/merge-sarif.fuzz.test.ts

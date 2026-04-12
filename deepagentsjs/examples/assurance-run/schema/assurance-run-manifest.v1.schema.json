@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://asst.local/schema/assurance-run-manifest.v1.json",
+  "title": "AssuranceRunManifestV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "generated_at", "git", "tools"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "assurance_run_manifest_v1"
+    },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "git": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit_sha", "dirty"],
+      "properties": {
+        "commit_sha": { "type": "string", "minLength": 7 },
+        "ref": { "type": "string" },
+        "dirty": { "type": "boolean" }
+      }
+    },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "version"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "version": { "type": "string", "minLength": 1 },
+          "exit_code": { "type": "integer" }
+        }
+      }
+    },
+    "artifact_hashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "merged_json_sha256": { "type": "string" },
+        "merged_sarif_sha256": { "type": "string" },
+        "lockfiles": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "static_analysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "semgrep": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "reason"],
+              "properties": {
+                "status": { "type": "string", "const": "skipped" },
+                "reason": { "type": "string" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "exit_code"],
+              "properties": {
+                "status": { "type": "string", "const": "ok" },
+                "exit_code": { "type": "integer" }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "notes": { "type": "string" },
+    "chain_intelligence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["skipped", "ok", "partial"]
+        },
+        "ingestion_method": {
+          "type": "string",
+          "enum": ["webhook", "websocket", "geyser", "rpc-polling"]
+        },
+        "evidence_bundle_sha256": { "type": "string", "minLength": 1 },
+        "notes": { "type": "string" }
+      }
+    },
+    "supply_chain": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "merged_json_sha256": { "type": "string" },
+        "npm_audit_exit_code": { "type": "integer" },
+        "npm_vulnerabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["info", "low", "moderate", "high", "critical"],
+          "properties": {
+            "info": { "type": "integer" },
+            "low": { "type": "integer" },
+            "moderate": { "type": "integer" },
+            "high": { "type": "integer" },
+            "critical": { "type": "integer" }
+          }
+        },
+        "rust": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "reason"],
+              "properties": {
+                "status": { "type": "string", "const": "skipped" },
+                "reason": { "type": "string" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status"],
+              "properties": {
+                "status": { "type": "string", "const": "ok" },
+                "cargo_audit_exit_code": { "type": "integer" },
+                "vulnerabilities_found": { "type": "integer" }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

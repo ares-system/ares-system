@@ -1,0 +1,89 @@
+# Assurance Run — PR workflow: build-verify lane (isolated shell) + P3 supply chain + commit-bound manifest
+# See deepagentsjs/examples/assurance-run/README.md — TOOLS.en.md §A/C + supply chain (pnpm audit).
+
+name: Assurance Run (PR)
+
+# contents: read — repo checkout. actions: write — upload-artifact / workflow run updates (see GH Actions hardening).
+permissions:
+  contents: read
+  actions: write
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  assurance:
+    name: Build-verify smoke + assurance manifest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.29.2
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version-file: deepagentsjs/.nvmrc
+          cache: pnpm
+          cache-dependency-path: deepagentsjs/pnpm-lock.yaml
+
+      - name: Install dependencies (deepagentsjs)
+        working-directory: deepagentsjs
+        run: pnpm install --frozen-lockfile
+
+      # Optional: live OpenRouter + deepagents smoke when repository secret OPENROUTER_API_KEY is set (skipped if unset or on forks without secrets).
+      - name: OpenRouter smoke (ChatOpenRouter + createDeepAgent)
+        if: ${{ secrets.OPENROUTER_API_KEY != '' }}
+        working-directory: deepagentsjs
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: pnpm exec tsx examples/assurance-run/openrouter-smoke.ts
+
+      - name: Install Semgrep (P2 static analysis)
+        run: pip install --user semgrep
+
+      - name: Add pip user bin to PATH
+        run: echo "$(python3 -m site --user-base)/bin" >> "$GITHUB_PATH"
+
+      # Mirrors TOOLS.en.md: build-verify lane + §A `execute` in an isolated working directory
+      # (same idea as examples/sandbox/local-sandbox.ts — LocalShellSandbox / constrained cwd).
+      - name: Build-verify lane — isolated shell (local-shell pattern)
+        run: |
+          set -euo pipefail
+          WORK="$(mktemp -d)"
+          trap 'rm -rf "$WORK"' EXIT
+          (
+            cd "$WORK"
+            echo "lane=build-verify" > proof.txt
+            node -e "console.log(JSON.stringify({ ok: true, node: process.version }))"
+          )
+
+      - name: Rust toolchain (P1 — when Cargo.lock present)
+        if: hashFiles('Cargo.lock') != ''
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Cargo metadata (evidence for manifest lane)
+        if: hashFiles('Cargo.lock') != ''
+        run: cargo metadata --format-version 1 --no-deps > "${{ runner.temp }}/cargo-metadata.json"
+
+      - name: Write assurance manifest (commit-bound)
+        working-directory: deepagentsjs
+        run: |
+          pnpm exec tsx examples/assurance-run/write-run-manifest.ts \
+            --cwd "${{ github.workspace }}" \
+            --out assurance \
+            --semgrep-scan-root deepagentsjs \
+            --notes "workflow=assurance-run-pr.yml;run_id=${{ github.run_id }};lane=build-verify+p2-semgrep+p3-supply-chain;backend=local-shell-isolated-cwd"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: assurance-manifest-${{ github.sha }}
+          path: assurance/

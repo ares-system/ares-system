@@ -1,0 +1,22 @@
+slug,label,commit_manifest,sarif_merge,agent_orchestration,sandbox_cli,runtime_monitoring,user_wallet_security
+ASST,"ASST — ARES Solana Security Tool",5,5,5,5,1,0
+bulwark,Bulwark,2,3,2,2,3,0
+smart-contract-security-audit,Smart contract security audit,1,2,2,1,0,0
+solanaizer,SolanAIzer,2,3,1,3,0,0
+excalead,Excalead,1,2,2,1,0,0
+audit.ai,Audit.ai,1,2,2,1,0,0
+poirot,Poirot,0,0,1,1,0,0
+leetsol,LEETSOL,1,2,1,1,0,0
+gecko-fuzz,Gecko fuzz,1,2,0,2,0,0
+vulnera-bug-bounty,Vulnera (bug bounty),0,0,0,1,0,0
+solana-buildpack,Solana buildpack,3,1,0,4,0,0
+insureos,InsureOS,1,1,1,1,2,0
+idl-space,IDL Space,2,1,1,2,0,0
+txtx,Txtx,3,1,1,4,0,0
+tokamai,Tokamai,0,0,1,2,5,0
+conyr,CONYR,0,0,2,1,4,0
+mercantill,Mercantill,2,1,3,2,1,0
+detectify,DETECTIFY,0,0,0,1,0,4
+pepelock,Pepelock,0,1,1,1,2,0
+playfair,PlayFair,1,0,1,1,0,0
+unruggable-line,Unruggable (wallet line),0,0,0,1,0,5

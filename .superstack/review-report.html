@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Review and Iterate — ASST (2026-04-12)</title>
+  <style>
+    body { font-family: system-ui, sans-serif; line-height: 1.5; max-width: 52rem; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+    h1 { font-size: 1.35rem; }
+    h2 { font-size: 1.1rem; margin-top: 1.75rem; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
+    th, td { text-align: left; border: 1px solid #ccc; padding: 0.4rem 0.6rem; }
+    th { background: #f4f4f4; }
+    .grade { font-weight: 600; }
+    .note { background: #f8f4e8; padding: 0.75rem 1rem; border-radius: 6px; }
+    code { font-size: 0.88em; }
+    ul { padding-left: 1.25rem; }
+  </style>
+</head>
+<body>
+  <h1>Review and Iterate — ASST</h1>
+  <p><strong>Date:</strong> 2026-04-12 &middot; <strong>Skill:</strong> review-and-iterate (Solana-oriented)</p>
+
+  <div class="note">
+    <strong>Scope reality:</strong> This workspace contains <strong>no Solana on-chain program</strong>
+    (no <code>Anchor.toml</code>, no <code>programs/</code>, no <code>*.rs</code>). P0 checks from
+    <code>security-basics.md</code> (signer, PDA, checked math, reinitialization, etc.) do not apply to Rust code here.
+    The review below scores the <strong>available</strong> codebase (<code>deepagentsjs/</code> TypeScript monorepo) and records blockers for a literal “mainnet program” launch.
+  </div>
+
+  <h2>Grades (rubric-aligned)</h2>
+  <table>
+    <thead>
+      <tr><th>Dimension</th><th>Grade</th><th>Notes</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Security (3×)</td>
+        <td class="grade">C</td>
+        <td>No programs to verify; dependency issues mitigated via pnpm overrides (axios, langsmith). See CSO report.</td>
+      </tr>
+      <tr>
+        <td>Correctness (2×)</td>
+        <td class="grade">B</td>
+        <td>Not exhaustively proven; upstream library patterns assumed sound for happy paths.</td>
+      </tr>
+      <tr>
+        <td>Error handling (2×)</td>
+        <td class="grade">B</td>
+        <td>Typical TS patterns; not audited line-by-line.</td>
+      </tr>
+      <tr>
+        <td>Testing (1.5×)</td>
+        <td class="grade">B</td>
+        <td>Monorepo has unit/integration tests and CI (Vitest, matrix Node).</td>
+      </tr>
+      <tr>
+        <td>Organization (1×)</td>
+        <td class="grade">B</td>
+        <td>Clear libs/providers split.</td>
+      </tr>
+      <tr>
+        <td>Documentation (0.5×)</td>
+        <td class="grade">B</td>
+        <td>READMEs, <code>.env.example</code> in examples.</td>
+      </tr>
+    </tbody>
+  </table>
+  <p><strong>Overall (informal):</strong> <span class="grade">B–C</span> — driven by “no chain” + supply-chain remediation.</p>
+  <p><strong><code>review.ready_for_mainnet</code>:</strong> <code>false</code> (nothing on-chain to deploy).</p>
+
+  <h2>Findings and fixes</h2>
+  <table>
+    <thead>
+      <tr><th>Severity</th><th>Category</th><th>Fix</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>High</td>
+        <td>Scope</td>
+        <td>Add an Anchor program in this repo or run this skill against the repo that contains <code>programs/</code>.</td>
+      </tr>
+      <tr>
+        <td>High</td>
+        <td>Supply chain</td>
+        <td>Applied <code>pnpm.overrides</code> in <code>deepagentsjs/package.json</code>: <code>axios@&lt;1.15.0 → 1.15.0</code>, <code>langsmith@&lt;=0.5.17 → 0.5.18</code>. Run <code>pnpm install && pnpm audit</code>.</td>
+      </tr>
+      <tr>
+        <td>Low</td>
+        <td>Hygiene</td>
+        <td>Added root <code>.gitignore</code> for <code>.env</code> so future commits do not leak secrets.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Phase 3 (Launch) skills</h2>
+  <p>When you have a Solana program in scope and grades improve: consider <strong>deploy-to-mainnet</strong>, <strong>create-pitch-deck</strong>, or <strong>submit-to-hackathon</strong> per the skill handoff — not applicable until on-chain code exists.</p>
+
+  <p style="margin-top:2rem;font-size:0.85rem;color:#555;">Artifact: <code>.superstack/review-report.html</code> &middot; Context: <code>.superstack/build-context.md</code></p>
+</body>
+</html>

@@ -1,0 +1,23 @@
+{
+  "name": "@asst/mcp-assurance",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP (stdio) server exposing ASST assurance tools: Semgrep, SARIF merge, git summary, Solana RPC read, manifest writer",
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.3",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

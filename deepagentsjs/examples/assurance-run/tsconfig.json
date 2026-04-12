@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true
+  },
+  "include": [
+    "src/**/*.ts",
+    "vitest.config.ts",
+    "openrouter-smoke.ts",
+    "write-run-manifest.ts"
+  ]
+}

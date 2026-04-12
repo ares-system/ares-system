@@ -1,0 +1,22 @@
+# Copy to config.yaml and edit. Used by run_forecast.py
+random_seed: 42
+
+# Monthly synthetic history length and splits
+history_months: 48
+holdout_months: 6
+forecast_months: 12
+
+# MRR (USD) — illustrative subscription + growth + seasonality + noise
+mrr:
+  start_usd: 5000
+  monthly_growth_rate: 0.015
+  noise_std_usd: 250
+  # multiplicative seasonality: factor per calendar month (Jan=1 ...); mean ~1.0
+  seasonal_factors: [0.92, 0.95, 1.0, 1.02, 1.03, 1.04, 1.02, 1.0, 0.98, 1.0, 1.05, 1.07]
+
+# Usage — e.g. assurance runs / month (same length series, different scale)
+usage:
+  start_runs: 800
+  monthly_growth_rate: 0.018
+  noise_std_runs: 45
+  seasonal_factors: [0.94, 0.96, 1.01, 1.0, 1.02, 1.05, 1.03, 0.99, 0.97, 1.01, 1.04, 1.08]

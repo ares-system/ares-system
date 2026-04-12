@@ -1,0 +1,58 @@
+# Phase 4 — CI/CD: default quality gate for deepagentsjs (build, typecheck, unit tests).
+# Secrets: none required. Integration tests (test:int) stay local/optional — may need API keys / Docker.
+
+name: deepagentsjs CI
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+      - "deepagentsjs/**"
+      - ".github/workflows/deepagentsjs-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "deepagentsjs/**"
+      - ".github/workflows/deepagentsjs-ci.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build, typecheck, unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: deepagentsjs
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10.29.2
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version-file: deepagentsjs/.nvmrc
+          cache: pnpm
+          cache-dependency-path: deepagentsjs/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test:unit
+
+      - name: Assurance-run coverage gate
+        run: pnpm --filter "@asst/assurance-run" test:coverage

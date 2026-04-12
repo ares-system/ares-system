@@ -1,0 +1,64 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+**/node_modules
+/.pnp
+.pnp.js
+.yarn/install-state.gz
+.yarn/cache
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+/dist
+**/dist
+/dist-examples
+**/dist-examples
+.turbo/
+
+# misc
+.DS_Store
+*.pem
+.idea
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files
+.env*.local
+.env
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+credentials.json
+
+# LangGraph API
+.langgraph_api
+
+**/.claude/settings.local.json
+
+# Agent OS
+agent-os
+.claude
+
+# Sandbox workspace directory - created at runtime
+sandbox-workspace/
+coverage
+workspace/
+
+# Assurance Run — generated manifests (examples/assurance-run/write-run-manifest.ts)
+/assurance/

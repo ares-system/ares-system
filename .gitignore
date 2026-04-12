@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+
+# Local IDE / ephemeral workspace
+.cursor/
+var/
+
+node_modules/
+
+# Assurance Run manifests at repo root (CI uploads artifacts; ignore local/CI workspace copies if desired)
+/assurance/
+
+# Colosseum Copilot local scan output (may contain API response snippets)
+/scripts/copilot-scan-output.txt

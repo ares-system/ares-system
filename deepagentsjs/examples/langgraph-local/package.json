@@ -1,0 +1,28 @@
+{
+  "name": "@asst/langgraph-local",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Minimal LangGraph app for local dev: Agent Server (langgraphjs dev), MemorySaver, interrupt HITL, Vitest",
+  "scripts": {
+    "dev": "langgraphjs dev",
+    "dev:tunnel": "langgraphjs dev --tunnel",
+    "invoke": "tsx src/run-local.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@langchain/core": "^1.1.38",
+    "@langchain/langgraph": "^1.2.8",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@tsconfig/recommended": "^1.0.13",
+    "@langchain/langgraph-cli": "^1.1.2",
+    "@types/node": "^25.2.3",
+    "dotenv": "^17.2.4",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2",
+    "vitest": "^4.0.18"
+  }
+}
