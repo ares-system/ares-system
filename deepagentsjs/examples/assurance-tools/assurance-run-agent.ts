@@ -1,4 +1,4 @@
-import { createDeepAgent } from "../../libs/deepagents/src/index.ts";
+import { createReactAgent } from "@langchain/langgraph/prebuilt";
 
 import {
   createAssuranceRunChatModel,
@@ -17,24 +17,27 @@ import { secretScannerTool } from "./secret-scanner.js";
 import { envHygieneCheckTool } from "./env-hygiene-check.js";
 import { unifiedPostureReportTool } from "./unified-posture-report.js";
 import { gitCloneRepoTool } from "./git-clone-repo.js";
+import { generatePdfReportTool } from "./generate-pdf-report-tool.js";
 
 /**
  * Preset deep agent for Solana assurance runs (TOOLS §A–E lanes).
  * Uses LangChain `ChatOpenRouter` from `createAssuranceRunChatModel()` — **OpenRouter is required**
  * (`OPENROUTER_API_KEY` in `deepagentsjs/.env`; see `assurance-llm.ts`).
  */
-export function createAssuranceRunSolanaAgent() {
+export function createAssuranceRunSolanaAgent(toolModelId?: string, orchestratorModelId?: string) {
   loadDeepagentsEnv();
-  const model = createAssuranceRunChatModel();
-  return createDeepAgent({
-    model,
-    systemPrompt:
-      "You orchestrate Solana security assurance: static analysis (Semgrep/SARIF), " +
-      "supply chain, commit-bound manifests. " +
-      "DEFAULT BEHAVIOR: If the user does not provide a URL, you MUST analyze the local host repository by invoking your security tools without any `cwd` argument (they will automatically target the local root). " +
-      "EXTERNAL REPOS: ONLY if the user explicitly provides an external https Git URL, you must invoke the git_clone_repo tool first. Once cloned, explicitly pass the resulting workspace path " +
-      "as the `cwd` parameter to EVERY subsequent security scan tool to focus analysis on that external repo. " +
-      "If answering security questions, analyze state snapshots, CPI graphs, and hygiene.",
+  const model = createAssuranceRunChatModel({}, orchestratorModelId || "meta-llama/llama-3.3-70b-instruct:free");
+
+  return createReactAgent({
+    llm: model,
+    messageModifier:
+      "You are ASST, a SecOps Agentic specialist. You HAVE the capability to perform end-to-end security assurance on Solana repositories. " +
+      "MISSION: When a URL is provided, you MUST use `git_clone_repo` first. Then, systematically use your security tools (scanners, diffs, analyzer) to generate a comprehensive report. " +
+      "AUTONOMY: You are fully authorized to execute these scans. Proceed directly to tool execution. " +
+      "EXTERNAL REPOS: If a Git URL is provided, clone it first, then use the resulting path for all scanning tools to focus analysis. " +
+      "FINAL REPORT: Once any action (Full Assurance, Scan Diff, or Account Analysis) is COMPLETED 100%, you MUST invoke `generate_pdf_report`. " +
+      "In your final summary, you MUST include the token `[REPORT:RepoName]` (e.g., `[REPORT:ASST]`) at the end of your message to provide the user with a download link. " +
+      "NEVER show the button until the report has been successfully generated.",
     tools: [
       solanaRpcReadTool,
       gitCloneRepoTool,
@@ -48,21 +51,7 @@ export function createAssuranceRunSolanaAgent() {
       secretScannerTool,
       envHygieneCheckTool,
       unifiedPostureReportTool,
-    ],
-    subagents: [
-      {
-        name: "static-policy",
-        description:
-          "Static analysis and policy: Semgrep, SARIF merge, dependency posture.",
-        systemPrompt:
-          "Focus on SAST output and manifest hashes. Do not invent findings.",
-      },
-      {
-        name: "build-verify",
-        description: "Build and verify lane when cargo/Anchor is in scope.",
-        systemPrompt:
-          "When invoked, reason about Rust/Anchor build evidence; do not run unscoped shell.",
-      },
+      generatePdfReportTool,
     ],
   });
 }

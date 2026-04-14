@@ -7,7 +7,7 @@ const execAsync = promisify(exec);
 
 export async function POST(req: Request) {
   try {
-    const { prompt } = await req.json();
+    const { prompt, toolModel } = await req.json();
 
     if (!prompt) {
       return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
@@ -16,15 +16,17 @@ export async function POST(req: Request) {
     // Run the agent CLI in the deepagentsjs directory
     const cwd = join(process.cwd(), "../../deepagentsjs");
     
-    // Clean up Next.js injected Git environment variables so git resolves correctly from cwd
+    // Clean up ALL Next.js injected Git environment variables so git resolves correctly from cwd
     const cleanEnv: Record<string, string | undefined> = { ...process.env };
-    delete cleanEnv.GIT_DIR;
-    delete cleanEnv.GIT_WORK_TREE;
-    delete cleanEnv.GIT_INDEX_FILE;
+    Object.keys(cleanEnv).forEach(key => {
+      if (key.startsWith("GIT_")) {
+        delete cleanEnv[key];
+      }
+    });
 
     // Use exec so Windows resolves pnpm through the shell environment variables
     const { stdout, stderr } = await execAsync(
-      `pnpm exec tsx examples/assurance-tools/agent-cli.ts "${prompt.replace(/"/g, '\\"')}"`, 
+      `pnpm exec tsx examples/assurance-tools/agent-cli.ts "${prompt.replace(/"/g, '\\"')}" "${toolModel || "meta-llama/llama-3.3-70b-instruct:free"}"`, 
       { 
         cwd, 
         maxBuffer: 20 * 1024 * 1024,

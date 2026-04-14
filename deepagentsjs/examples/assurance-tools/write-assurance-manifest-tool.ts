@@ -48,7 +48,12 @@ export const writeAssuranceManifestTool = tool(
     const { stdout, stderr } = await execFileAsync("pnpm", args, {
       cwd: deepagentsRoot,
       maxBuffer: 20 * 1024 * 1024,
-      env: process.env,
+      env: { 
+        ...process.env,
+        SystemRoot: process.env.SystemRoot || "C:\\Windows",
+        ComSpec: process.env.ComSpec || "C:\\Windows\\system32\\cmd.exe",
+      },
+      shell: true,
     });
     return `${stdout}\n${stderr}`;
   },

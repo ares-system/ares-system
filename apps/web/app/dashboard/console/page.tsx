@@ -25,6 +25,7 @@ export default function AgentConsole() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [thinkingIndex, setThinkingIndex] = useState(0);
+  const [toolModel, setToolModel] = useState("gemini-2.5-flash");
 
   const thinkingStates = [
     "Triggering LangChain backend...",
@@ -64,7 +65,7 @@ export default function AgentConsole() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: cmd })
+        body: JSON.stringify({ prompt: cmd, toolModel })
       });
       
       const data = await res.json();
@@ -136,9 +137,36 @@ export default function AgentConsole() {
                 {msg.text === "THINKING_PLACEHOLDER" ? (
                   <span className="animate-pulse">{thinkingStates[thinkingIndex]}</span>
                 ) : (
-                  msg.text.split(/(\*\*.*?\*\*|\n)/g).map((part, i) => {
+                  msg.text.split(/(\*\*.*?\*\*|\n|\[REPORT:.*?\])/g).map((part, i) => {
                     if (part.startsWith('**') && part.endsWith('**')) {
                       return <strong key={i} style={{ color: "var(--text-primary)", fontWeight: "600" }}>{part.slice(2, -2)}</strong>;
+                    }
+                    if (part.startsWith('[REPORT:') && part.endsWith(']')) {
+                      const repoName = part.slice(8, -1);
+                      return (
+                        <div key={i} style={{ marginTop: "12px" }}>
+                          <button 
+                            onClick={() => window.open(`/api/report?repo=${repoName}`, "_blank")} 
+                            style={{ 
+                              background: "var(--brand-terracotta)", 
+                              border: "none", 
+                              padding: "8px 16px", 
+                              borderRadius: "var(--radius-md)", 
+                              color: "white", 
+                              fontSize: "14px", 
+                              cursor: "pointer",
+                              fontWeight: "600",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              boxShadow: "0 4px 12px rgba(181, 76, 56, 0.25)"
+                            }}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                            View Finalized {repoName} Report (PDF)
+                          </button>
+                        </div>
+                      );
                     }
                     if (part === '\n') {
                       return <br key={i} />;
@@ -163,6 +191,30 @@ export default function AgentConsole() {
           <button onClick={() => handleCommand("Analyze program accounts for specific PDA issues")} style={{ 
             background: "var(--bg-surface)", border: "1px solid var(--border-light)", padding: "6px 12px", borderRadius: "100px", color: "var(--text-secondary)", fontSize: "13px", cursor: "pointer" 
           }}>🏦 Account Analysis</button>
+
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "12px", color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Tooling Model:</span>
+            <select 
+              value={toolModel} 
+              onChange={(e) => setToolModel(e.target.value)}
+              style={{
+                background: "var(--bg-surface)",
+                border: "1px solid var(--border-light)",
+                borderRadius: "4px",
+                color: "var(--text-secondary)",
+                padding: "4px 8px",
+                fontSize: "13px",
+                outline: "none",
+                cursor: "pointer"
+              }}
+            >
+              <option value="gemini-2.5-flash">⭐ Google Gemini 2.5 Flash (Recommended)</option>
+              <option value="gemini-2.0-flash-001">Google Gemini 2.0 Flash (Stable)</option>
+              <option value="meta-llama/llama-3.3-70b-instruct:free">Meta Llama 3.3 70B (OpenRouter)</option>
+              <option value="qwen/qwen3-coder:free">Qwen3 Coder (OpenRouter)</option>
+              <option value="qwen/qwen3-next-80b-a3b-instruct:free">Qwen3 Next 80B (OpenRouter)</option>
+            </select>
+          </div>
         </div>
 
         {/* Input area */}
