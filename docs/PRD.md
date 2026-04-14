@@ -1,152 +1,75 @@
-# Product Requirements Document — ASST / Assurance Run
+# Product Requirements Document (PRD): ASST
 
-**Document:** PRD  
-**Product:** ARES Solana Security Tool (**ASST**) — **Assurance Run** pattern  
-**Version:** 1.0  
-**Date:** 2026-04-12  
-**Status:** Active — aligns with [WHITEPAPER.en.md](../WHITEPAPER.en.md) and repo layout in [README.md](../README.md)
+**Title**: ARES Solana Security Tool (ASST) / Assurance Run  
+**Version**: 1.0.0  
+**Status**: Finalized (Current Implementation)
 
 ---
 
-## 1. Summary
+## 1. Executive Summary
+ASST is an agentic SecOps platform designed for **Solana** ecosystem projects. It shifts security from "one-off audits" to **Assurance Runs**—repeatable, orchestrated, and evidential workflows that produce commit-bound security manifests.
 
-**Assurance Run** is an orchestration layer for teams shipping **Solana / Anchor** (and related) software. It uses **`deepagentsjs`** (LangGraph-based agents) to run **scoped, layered security checks** and emit **commit-bound evidence** (manifests, merged SARIF, logs)—not a one-off chat score or a replacement for professional audits when the threat model requires them.
+## 2. Problem Statement
+Traditional security audits are slow, manual, and often disconnected from the active development cycle. Developers need a way to perform deep security checks (L1–L6) that are as automated as unit tests but as intelligent as a security researcher.
 
-**Problem:** Security work is fragmented across static scanners, LLM assistants, CI scripts, and periodic reviews. Outputs rarely attach **reproducible command history**, **tool versions**, and **deterministic linkage** to a **Git SHA**.
+## 3. Product Vision
+To be the definitive "Assurance Lane" for Solana developers, providing an autonomous agent that can understand repository context, execute complex scanning layers, and generate professional-grade evidence for stakeholders.
 
-**Solution:** A **control-plane agent** plans and delegates to **subagents**, runs **sandboxed** execution where appropriate, optional **human-in-the-loop (HITL)** for irreversible actions, and writes artifacts under a stable prefix (e.g. `assurance/`).
+## 4. Target Audience
+- **Solana Lead Developers**: Seeking to gate PRs with automated security manifests.
+- **Security Engineers/Auditors**: Running multi-tool scans to identify low-hanging fruit and complex logic flaws.
+- **SecOps Teams**: Managing security posture across multiple repositories.
 
----
+## 5. Functional Requirements
 
-## 2. Goals
+### 5.1. Agentic Orchestration (The Engine)
+- **Autonomous Reasoning**: Agents must utilize LangGraph to intelligently select tools based on the repository's technology stack (Anchor, Rust, etc.).
+- **GIT Lifecycle Management**: Support for cloning remote repositories and scanning local workspaces.
+- **Multi-Model Support**: Support for OpenRouter (Llama 3 70B+) and Google Gemini 2.x models for robust logic and high-token context.
 
-| ID | Goal | Measurable signal |
-|----|------|---------------------|
-| G1 | **Reproducible evidence** per meaningful change | Manifest includes commit SHA, tool rows, hashes, exit codes |
-| G2 | **Layered checks** without a single generic scanner | Lanes for static/policy, build-verify, merge-report (extensible) |
-| G3 | **Least privilege** by default | No signing keys in agent state; RPC read-only; risky tools gated or sandboxed |
-| G4 | **CI integration** | Workflows can run lanes and upload artifacts; path filters where useful |
-| G5 | **Operator clarity** | Human-readable summary + machine-readable SARIF/JSON merge path |
-| G6 | **Optional multi-surface access** | Same capabilities via LangChain tools and/or **MCP stdio server** ([`deepagentsjs/examples/asst-mcp-server`](../deepagentsjs/examples/asst-mcp-server/README.md)) |
+### 5.2. Security Scanning Layers (The 6 Lanes)
+| Lane | Name | Description | Tools |
+|------|------|-------------|-------|
+| **L1** | Program Logic | On-chain instruction safety checks. | Semgrep, Clippy |
+| **L2** | Code Hygiene | Coding standards and best practices. | ESLint, Rustfmt |
+| **L3** | Chain State | Live program account and upgrade analysis. | RPC Account Analyzer, Upgrade Monitor |
+| **L4** | Off-Chain | SDK and Client-side security. | Secret Scanner |
+| **L5** | Networking | API and RPC configuration checks. | Env Hygiene Check |
+| **L6** | Supply Chain | Dependency vulnerability scanning. | pnpm/cargo audit |
 
----
+### 5.3. Deliverables & Evidence
+- **Assurance Manifests**: JSON artifacts (standardized schema) containing all findings, tool metadata, and commit hashes.
+- **Unified Findings UI**: A dashboard that groups findings by repository, severity, and security layer.
+- **Automated PDF Reports**: High-fidelity, branded security reports generated as a one-click artifact from the chat thread.
 
-## 3. Non-goals
+## 6. Technical Requirements
 
-- **Formal verification** unless explicitly implemented with stated assumptions and coverage.
-- **Autonomous deployment** or **custodial keys** for agents in the default posture.
-- **Guarantee** of finding all vulnerabilities; focus is **traceable process and evidence**.
-- **Replacing** external audits where policy or customers require them.
+### 6.1. Technology Stack
+- **Frontend**: Next.js 14+, Vanilla CSS (Premium Dark/Parchment Aesthetic).
+- **Engine**: LangGraph / LangChain + Node.js (TypeScript).
+- **Communication**: Shared local filesytem for "Commit-bound" evidence in the `/assurance` directory.
+- **PDF Engine**: `jspdf` + `jspdf-autotable`.
 
----
+### 6.2. Platform Compatibility
+- **Cross-Platform**: Full support for Windows (cmd/ps) and Linux (bash), resolving environment pathing issues (`shell: true`).
+- **Monorepo Architecture**: Efficiently managed via `pnpm`.
 
-## 4. Personas
+## 7. User Experience (UX) Standards
 
-| Persona | Needs |
-|---------|--------|
-| **Solana engineer** | Fast feedback on PRs; clear failures; minimal friction |
-| **Security / CI owner** | Policy-as-code, SARIF merge, supply-chain signals, immutable pins |
-| **Leadership / compliance** | Commit-bound bundle, optional digest narrative (see dashboard UX docs) |
+### 7.1. Agent Console
+- **Premium Aesthetic**: Minimalist design using a color palette of "Terracotta", "Coral", and "Deep Charcoal".
+- **Real-time Feedback**: "Thinking" states and tool execution indicators.
+- **In-Thread Context**: Download links for reports must appear in the chat flow to maintain conversation context.
 
----
+### 7.2. Reporting
+- **Branding**: Reports must feature the ASST brand identity and professional tables.
+- **Accessibility**: Support for PDF viewing in-browser and local download.
 
-## 5. Functional requirements
-
-### 5.1 Core orchestration
-
-| ID | Requirement | Priority |
-|----|-------------|----------|
-| F1 | Orchestrator can plan a **scoped run** (diff/PR-aware in product vision; MVP may use full repo paths) | P0 |
-| F2 | Delegation to **named subagents** (e.g. static-policy, build-verify) via `task` | P0 |
-| F3 | **Filesystem / todos / summarization** middleware consistent with `deepagentsjs` | P0 |
-| F4 | Optional **HITL** (`interruptOn` + checkpointer) for privileged tools | P1 |
-
-### 5.2 Evidence artifacts
-
-| ID | Requirement | Priority |
-|----|-------------|----------|
-| F5 | Emit **assurance manifest** (schema versioned; see `examples/assurance-run/schema/`) | P0 |
-| F6 | **Semgrep → SARIF** lane when `semgrep` is available; deterministic merge | P1 |
-| F7 | **Supply-chain** slice in manifest (e.g. pnpm/cargo signals) where configured | P1 |
-| F8 | **Merged SARIF** output path recorded in manifest / operator docs | P1 |
-
-### 5.3 Tools and integrations
-
-| ID | Requirement | Priority |
-|----|-------------|----------|
-| F9 | **Solana JSON-RPC read** tool (env-configured endpoint) | P0 |
-| F10 | **Git diff / status** read-only summary for evidence | P0 |
-| F11 | **MCP server** exposing semgrep scan, merge SARIF, git summary, RPC read, manifest CLI spawn | P1 |
-| F12 | **OpenRouter** (or configured model) for preset assurance agent smoke paths | P2 |
-
-### 5.4 CLI and apps
-
-| ID | Requirement | Priority |
-|----|-------------|----------|
-| F13 | **`asst-manifest`** CLI validates/reads manifests (`apps/asst-cli/`) | P2 |
-| F14 | **Marketing web** shell (metadata, sitemap) — `apps/web/` | P3 |
+## 8. Success Metrics
+- **Analysis Speed**: End-to-end full assurance run in < 3 minutes.
+- **Accuracy**: zero "spawn ENOENT" errors for standard tool chains (pnpm, git, semgrep).
+- **Utility**: Successful generation of 100% compliant Assurance Manifests for every scan.
 
 ---
 
-## 6. Non-functional requirements
-
-| ID | Requirement |
-|----|-------------|
-| N1 | **Secrets:** no secrets committed; `.env` ignored; examples use `.env.example` |
-| N2 | **CI:** primary workflows build/test with path filters where appropriate |
-| N3 | **Docs:** English canonical narrative in whitepaper §9–§11; hubs for ARCHITECTURE / TOOLS / REFERENCES |
-| N4 | **Sandbox:** production posture assumes `execute` only via approved backends |
-
----
-
-## 7. Milestones (product engineering)
-
-Aligned with internal planning; adjust per scope.
-
-| Phase | Outcome |
-|-------|---------|
-| **P0** | Manifest writer + schema; example assurance-run package |
-| **P1** | CI PR workflow + isolated smoke; sandboxed execute directionally |
-| **P2** | Semgrep + SARIF + merge lane tied to SHA |
-| **P3** | Supply-chain merged JSON + manifest summary |
-| **P4** | Extended tests / fuzz where applicable |
-| **P5** | Optional devnet digest / attestation (policy-dependent) |
-
----
-
-## 8. Dependencies
-
-- **Runtime:** Node 20+, `pnpm` for `deepagentsjs`
-- **Optional:** `semgrep`, `git`, Solana RPC URL, `OPENROUTER_API_KEY` for LLM smoke
-- **Upstream:** LangGraph / LangChain ecosystem, `deepagents` package
-
----
-
-## 9. Risks and mitigations
-
-| Risk | Mitigation |
-|------|------------|
-| Toolchain drift (Anchor/Rust) | Versioned skills, CI matrix, documented pins |
-| LLM hallucinated findings | Require tool/log citations; merge lane dedupe |
-| Over-privileged agent | Default read-only RPC; HITL; sandbox execution |
-| MCP / subprocess abuse | Restrict `cwd`, timeouts, org policy on allowed roots |
-
----
-
-## 10. Open questions
-
-- Which **default rulesets** and **gate policy** (block vs warn) per customer tier?
-- **On-chain digest** scope and legal review for customer-facing claims?
-- **Hosted** vs **self-hosted** MCP and agent runtime for enterprise?
-
----
-
-## 11. References
-
-- [WHITEPAPER.en.md](../WHITEPAPER.en.md) — product narrative, §9 Architecture, §10 Tools, §11 References  
-- [ARCHITECTURE.md](../ARCHITECTURE.md) — bilingual architecture hub  
-- [TOOLS.md](../TOOLS.md) — tool catalog hub  
-- [deepagentsjs/docs/TOOLS-MAP.md](../deepagentsjs/docs/TOOLS-MAP.md) — code ↔ tools map  
-- [README.md](../README.md) — repository map---
-
-*PRD is for internal and partner planning. It does not constitute a security audit, certification, or legal commitment.*
+*Verified & Committed by ASST Core Team.*
