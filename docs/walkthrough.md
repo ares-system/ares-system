@@ -1,51 +1,56 @@
-# Walkthrough: End-to-End Security Assurance
+# ASST CLI Transformation Walkthrough
 
-This document provides a guided walkthrough of the **ARES Solana Security Tool (ASST)** project, focusing on the core user journey from repository analysis to finalized security reporting.
+## 1. Overview
+The ASST Solana Security Tool has been modernized from a Next.js web application into a CLI-native Agentic Tool. This change enables developers to perform high-speed security audits directly from their local workspace without requiring a browser.
 
-## 1. Initial Setup & Initialization
+## 2. Key Components Created
 
-ASST is built as a monorepo. To get started, you initialize the environment from the root:
+### 2.1 CLI Entry Point (`apps/asst-cli/src/asst.ts`)
+- Implemented using **Commander.js**.
+- Commands:
+  - `asst init`: Environment configuration.
+  - `asst scan`: Sequential L1-L6 security assurance.
+  - `asst chat`: Persistent REPL for codebase interaction.
+  - `asst index`: Search indexing for the repository.
 
+### 2.2 Agentic Engine (`apps/asst-cli/src/engine/agent.ts`)
+- Orchestrates LangGraph logic for the terminal.
+- Integrates 11+ security tools from `deepagentsjs`.
+- Provides stateful chat sessions with SQLite persistence.
+
+### 2.3 Integrated Security Tools
+- **Filesystem Tools:** `read_file`, `write_file`, and `run_terminal_cmd`.
+- **Solana Tools:** RPC analysis, Git Diff, Account Snapshot, etc.
+
+## 3. How to Use
+
+### Installation
 ```bash
+# From the monorepo root
 pnpm install
-# Environment variables must be set in .env.local
-# Required: OPENROUTER_API_KEY, GOOGLE_API_KEY
+cd apps/asst-cli
+pnpm build
+npm link # To use 'asst' command globally
 ```
 
-## 2. The Agentic Security Console
+### Running a Scan
+Navigate to your Solana/Anchor project and run:
+```bash
+asst scan .
+```
+1. ASST will perform sequential checks (L1-L6).
+2. A summary report of vulnerabilities will be printed.
+3. You will be asked if you want the agent to propose and apply fixes.
 
-The heart of the product is the **Agent Console** (`/dashboard/console`). Here, you interact with a SecOps Agentic specialist designed for Solana.
+### Interactive Chat
+Start a persistent session to ask specific questions about your code:
+```bash
+asst chat
+```
+The agent maintains history in `.asst/asst.db`, allowing for complex, multi-turn debugging.
 
-### Key Capabilities:
-- **Git Integration**: Provide a GitHub URL, and the agent uses `git_clone_repo` to pull the context locally.
-- **Multimodal Analysis**: The agent selects from 11+ specialized tools based on your prompts.
-- **Context Preservation**: The agent maintains the repository path and findings history throughout the session.
-
-## 3. The Security Assurance Lane (DMAIC Flow)
-
-When you trigger a "Full Assurance Run," the system executes an orchestrated sequence:
-
-1. **Layer 6 (Supply Chain)**: `pnpm audit` analysis via `write_assurance_manifest`.
-2. **Layer 1 (Code Logic)**: Static analysis (Semgrep/Clippy logic) and secret scanning.
-3. **Layer 3 (Chain State)**: RPC-based account analysis and upgrade monitor checks.
-4. **Aggregation**: `merge_findings` combines results into a unified JSON manifest.
-
-## 4. Automated Reporting & Interactive Dashboard
-
-### Unified Findings
-The **Findings Page** (`/dashboard/findings`) provides a high-level view of all identified vulnerabilities, now grouped by repository for multi-project management.
-
-### Finalized PDF Reports
-Once an analysis is 100% complete, the agent automatically:
-1. Generates a **Premium Branded PDF Report**.
-2. Displays an **interactive button** directly in the chat thread: `View Finalized [Repo] Report (PDF)`.
-
-## 5. Technical Resilience (Recent Enhancements)
-
-- **Windows Compatibility**: Resolved `ENOENT` errors for `pnpm` and `cmd.exe` by ensuring robust environment variable preservation and shell-native execution.
-- **Node-Native PDF Engine**: Implemented `jspdf-autotable` with a Node-compatible lifecycle to ensure zero-dependency, reliable document generation on the server side.
-- **Git Hygiene**: Next.js API routes now correctly handle clean Git environments, preventing conflicts between the web server and the agentic CLI.
+## 4. Safety First
+All destructive actions (`write_file`, `run_terminal_cmd`) are gated by a **Safe Mode** confirmation. The agent will describe exactly what it want to do and ask for your approval before proceeding.
 
 ---
-
-*For technical architecture details, see [ARCHITECTURE.md](../ARCHITECTURE.md). For product requirements, see [PRD.md](./PRD.md).*
+*Created by ASST Agent on 2026-04-15*

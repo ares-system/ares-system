@@ -10,8 +10,12 @@ export const secretScannerTool = tool(
   async (input) => {
     try {
       const cwd = input.cwd && input.cwd.trim() !== "" ? input.cwd : process.cwd();
+      const cleanEnv = { ...process.env };
+      Object.keys(cleanEnv).forEach(k => k.startsWith("GIT_") && delete cleanEnv[k]);
+
       const output = execFileSync("git", ["log", "--diff-filter=A", "-p"], {
         cwd,
+        env: cleanEnv,
         encoding: "utf8",
         maxBuffer: 10 * 1024 * 1024
       });
