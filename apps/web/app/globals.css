@@ -1,103 +1,121 @@
-:root {
-  color-scheme: dark;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Claude-inspired Light Theme (Parchment) */
+    --parchment: 48 24% 94%; /* #f5f4ed */
+    --ivory: 43 33% 97%; /* #faf9f5 */
+    --background: var(--parchment);
+    --foreground: 40 4% 8%; /* #141413 - Anthropic Near Black */
+    
+    --card: var(--ivory);
+    --card-foreground: var(--foreground);
+    
+    --popover: var(--ivory);
+    --popover-foreground: var(--foreground);
+    
+    --primary: 15 54% 52%; /* #c96442 - Terracotta */
+    --primary-foreground: var(--ivory);
+    
+    --secondary: 48 22% 89%; /* #e8e6dc - Warm Sand */
+    --secondary-foreground: 40 4% 28%; /* #4d4c48 - Charcoal Warm */
+    
+    --muted: 48 20% 89%;
+    --muted-foreground: 45 3% 43%; /* #5e5d59 - Olive Gray */
+    
+    --accent: 48 22% 89%;
+    --accent-foreground: var(--foreground);
+    
+    --destructive: 0 56% 45%; /* #b53333 - Error Crimson */
+    --destructive-foreground: var(--ivory);
+    
+    --border: 48 33% 92%; /* #f0eee6 - Border Cream */
+    --input: 48 22% 89%;
+    --ring: 208 81% 58%; /* #3898ec - Focus Blue */
+    
+    --radius: 0.75rem;
+
+    /* Semantic Security Colors (Warm Tones) */
+    --severity-critical: #b53333;
+    --severity-high: #d97757;
+    --severity-medium: #c96442;
+    --severity-low: #87867f;
+    --severity-info: #b0aea5;
+  }
+
+  .dark {
+    --background: 40 4% 8%; /* #141413 - Anthropic Near Black */
+    --foreground: 43 33% 97%; /* #faf9f5 - Ivory */
+    
+    --card: 40 4% 19%; /* #30302e - Dark Surface */
+    --card-foreground: var(--foreground);
+    
+    --popover: 40 4% 19%;
+    --popover-foreground: var(--foreground);
+    
+    --primary: 15 54% 52%; /* Terracotta */
+    --primary-foreground: var(--ivory);
+    
+    --secondary: 40 4% 19%;
+    --secondary-foreground: 43 14% 67%; /* #b0aea5 - Warm Silver */
+    
+    --muted: 40 4% 19%;
+    --muted-foreground: 43 14% 67%;
+    
+    --accent: 40 4% 19%;
+    --accent-foreground: var(--foreground);
+    
+    --border: 40 4% 19%;
+    --input: 40 4% 19%;
+    --ring: 208 81% 58%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
   
-  /* Claude Dark Adaptation */
-  --bg-parchment: #141413;    /* Near Black warm olive-black */
-  --bg-surface: #1a1a18;      /* Warm dark raised surface */
-  --bg-elevated: #21211e;     /* Floating elements */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-serif font-medium tracking-tight;
+    line-height: 1.15;
+  }
+}
+
+/* Claude Shadow Tokens */
+@layer components {
+  .ring-shadow {
+    box-shadow: 0px 0px 0px 1px hsl(var(--border));
+  }
   
-  --border-light: #2a2a27;    /* Subtle warm border */
-  --border-strong: #3a3a36;   /* Stronger warm border */
-  
-  --text-primary: #faf9f5;    /* Ivory */
-  --text-secondary: #b0aea5;  /* Warm Silver */
-  --text-tertiary: #87867f;   /* Stone Gray */
-  
-  --brand-terracotta: #c96442;
-  --brand-coral: #d97757;
-  
-  --focus-blue: #3898ec;
-  
-  /* Security Semantics */
-  --severity-critical: #ef4444;
-  --severity-high: #f97316;
-  --severity-medium: #f59e0b;
-  --severity-low: #3b82f6;
-  --severity-info: #87867f;
-  
-  --status-pass: #10b981;
-  --status-fail: #ef4444;
-  --status-skip: #87867f;
-  
-  /* Design System Radii */
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
-  --radius-2xl: 24px;
+  .whisper-shadow {
+    box-shadow: rgba(0, 0, 0, 0.05) 0px 4px 24px;
+  }
+
+  .ares-card {
+    @apply bg-card border border-border rounded-xl transition-all duration-200;
+  }
+
+  .ares-card-interactive {
+    @apply hover:ring-shadow hover:bg-accent/50;
+  }
 }
 
-*, *::before, *::after {
-  box-sizing: border-box;
+/* Layout Utilities */
+.editorial-spacing {
+  @apply py-20 md:py-32;
 }
 
-html {
-  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
-  line-height: 1.6; /* Generous Claude-like line height */
-  background: var(--bg-parchment);
-  color: var(--text-primary);
+.near-black-bg {
+  background-color: #141413;
 }
 
-body {
-  margin: 0;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
+.parchment-bg {
+  background-color: #f5f4ed;
 }
-
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-serif), Georgia, serif;
-  font-weight: 500;
-  line-height: 1.2;
-  margin-top: 0;
-  margin-bottom: 1rem;
-}
-
-a {
-  color: var(--brand-coral);
-  text-decoration: none;
-}
-
-a:hover {
-  text-decoration: underline;
-}
-
-a:focus-visible {
-  outline: 2px solid var(--focus-blue);
-  outline-offset: 2px;
-}
-
-code, pre {
-  font-family: var(--font-mono), monospace;
-}
-
-/* Ring Shadow utility for Claude style depth */
-.ring-shadow {
-  box-shadow: 0px 0px 0px 1px var(--border-light);
-}
-
-.ring-shadow:hover {
-  box-shadow: 0px 0px 0px 1px var(--border-strong);
-}
-
-.whisper-shadow {
-  box-shadow: rgba(0, 0, 0, 0.4) 0px 4px 24px, 0px 0px 0px 1px var(--border-light);
-}
-
-/* Utility classes */
-.text-secondary { color: var(--text-secondary); }
-.text-tertiary { color: var(--text-tertiary); }
-.text-terracotta { color: var(--brand-terracotta); }
-
-.bg-surface { background-color: var(--bg-surface); }
-.bg-elevated { background-color: var(--bg-elevated); }

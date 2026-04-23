@@ -1,0 +1,104 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { 
+  LayoutDashboard, 
+  ShieldAlert, 
+  Target, 
+  Search, 
+  Activity, 
+  FileText, 
+  Settings, 
+  Terminal,
+  ChevronLeft,
+  ChevronRight,
+  Shield
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useUIStore } from "@/lib/ares/store";
+
+const navItems = [
+  { name: "Overview", href: "/dashboard/overview", icon: LayoutDashboard },
+  { name: "Targets", href: "/dashboard/targets", icon: Target },
+  { name: "Detections", href: "/dashboard/detections", icon: ShieldAlert },
+  { name: "Investigations", href: "/dashboard/investigations", icon: Search },
+  { name: "Agents", href: "/dashboard/agents", icon: Activity },
+  { name: "Reports", href: "/dashboard/reports", icon: FileText },
+  { name: "Console", href: "/dashboard/console", icon: Terminal },
+];
+
+export function Sidebar() {
+  const pathname = usePathname();
+  const { sidebarCollapsed, setSidebarCollapsed } = useUIStore();
+
+  return (
+    <aside className={cn(
+      "h-screen sticky top-0 border-r border-border bg-card transition-all duration-300 flex flex-col z-50",
+      sidebarCollapsed ? "w-16" : "w-64"
+    )}>
+      {/* Brand */}
+      <div className="p-6 h-16 flex items-center justify-between overflow-hidden whitespace-nowrap border-b border-border">
+        {!sidebarCollapsed && (
+          <Link href="/dashboard" className="flex items-center gap-2 group">
+            <div className="w-8 h-8 rounded bg-primary flex items-center justify-center transition-transform group-hover:scale-105">
+              <Shield className="w-4 h-4 text-primary-foreground" />
+            </div>
+            <span className="font-serif font-medium text-xl tracking-tight text-foreground transition-colors group-hover:text-primary">ARES</span>
+          </Link>
+        )}
+        {sidebarCollapsed && (
+          <Link href="/dashboard" className="w-8 h-8 rounded bg-primary flex items-center justify-center mx-auto transition-transform hover:scale-105">
+            <Shield className="w-4 h-4 text-primary-foreground" />
+          </Link>
+        )}
+      </div>
+
+      <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto overflow-x-hidden">
+        {navItems.map((item) => {
+          const isActive = pathname === item.href;
+          return (
+            <Link
+              key={item.name}
+              href={item.href}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2 rounded-lg transition-all group relative font-sans text-[15px]",
+                isActive 
+                  ? "bg-secondary text-foreground font-medium ring-shadow" 
+                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              )}
+            >
+              <item.icon className={cn("w-4 h-4 shrink-0 transition-colors", isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+              {!sidebarCollapsed && <span>{item.name}</span>}
+              
+              {sidebarCollapsed && (
+                <div className="absolute left-full ml-2 px-2 py-1 bg-foreground text-background text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
+                  {item.name}
+                </div>
+              )}
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="p-4 border-t border-border mt-auto">
+        <Link
+          href="/dashboard/settings"
+          className={cn(
+            "flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-all group relative font-sans text-[15px]",
+            pathname === "/dashboard/settings" && "bg-secondary text-foreground font-medium ring-shadow"
+          )}
+        >
+          <Settings className={cn("w-4 h-4 shrink-0", pathname === "/dashboard/settings" ? "text-primary" : "")} />
+          {!sidebarCollapsed && <span>Settings</span>}
+        </Link>
+        <button 
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          className="w-full flex items-center gap-3 px-3 py-2 mt-2 rounded-lg text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {sidebarCollapsed ? <ChevronRight className="w-4 h-4 mx-auto" /> : <div className="flex items-center gap-3"><ChevronLeft className="w-4 h-4" /><span className="text-[13px] font-medium uppercase tracking-wider">Collapse</span></div>}
+        </button>
+      </div>
+    </aside>
+  );
+}

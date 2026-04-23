@@ -6,12 +6,17 @@ dotenv.config({ path: path.join(process.cwd(), ".env.local") });
 dotenv.config({ path: path.join(process.cwd(), "..", "..", ".env.local") });
 
 import { Command } from "commander";
-import { intro, outro, text, confirm, spinner } from "@clack/prompts";
+import { text, isCancel } from "@clack/prompts";
 import { theme } from "./ui/theme.js";
+import { renderBanner } from "./ui/components/Banner.js";
+import { renderPanel, renderDivider } from "./ui/components/Panel.js";
 import { scanCommand } from "./commands/scan.js";
 import { chatCommand } from "./commands/chat.js";
 import { skillsCommand } from "./commands/skills.js";
+import { diffCommand } from "./commands/diff.js";
+import { watchCommand } from "./commands/watch.js";
 import fs from "node:fs";
+import chalk from "chalk";
 
 // -- Config Management --
 const CONFIG_PATH = path.join(process.cwd(), ".asst", "config.json");
@@ -34,29 +39,34 @@ function saveConfig(config: any) {
 }
 
 async function ensureConfig() {
-  // Multi-agent architecture requires GOOGLE_API_KEY for orchestrator
+  const c = theme.c;
   if (!process.env.GOOGLE_API_KEY) {
-    intro(theme.brand(" ASST Configuration Needed "));
-    console.log(theme.info("No GOOGLE_API_KEY found. ASST requires a Google AI Studio key for the orchestrator."));
-    console.log(theme.info("Get one at: https://aistudio.google.com/apikey\n"));
+    console.log("");
+    console.log(renderPanel(
+      chalk.hex(c.yellow)("No GOOGLE_API_KEY found.\n\n") +
+      chalk.hex(c.text)("ASST requires a Google AI Studio key for the orchestrator.\n") +
+      chalk.hex(c.cyan)("Get one at: https://aistudio.google.com/apikey"),
+      { title: "Configuration Required", borderColor: c.yellow, padding: 1 }
+    ));
+    console.log("");
 
     const apiKey = await text({
-      message: "Enter your Google API Key:",
+      message: chalk.hex(c.cyan)("❯") + " Enter your Google API Key:",
       placeholder: "AIzaSy...",
-      validate: (value) => {
+      validate: (value: string | undefined) => {
         if (!value) return "API Key is required.";
       }
     });
 
-    if (typeof apiKey === "symbol" || !apiKey) {
-      console.log(theme.error("Configuration cancelled."));
+    if (isCancel(apiKey) || !apiKey) {
+      console.log(chalk.hex(c.red)("\n  Configuration cancelled.\n"));
       process.exit(1);
     }
 
     const envPath = path.join(process.cwd(), ".env.local");
     fs.appendFileSync(envPath, `\nGOOGLE_API_KEY=${apiKey}\n`);
     process.env.GOOGLE_API_KEY = apiKey;
-    console.log(theme.accent(`Key saved to ${envPath}`));
+    console.log(chalk.hex(c.green)(`  ✓ Key saved to ${envPath}\n`));
   }
 }
 
@@ -65,16 +75,18 @@ const config = loadConfig();
 
 program
   .name("asst")
-  .description(theme.brand("ASST Terminal") + " - ARES Solana Security Tool (Multi-Agent)")
+  .description("ARES — Automated Resilience Evaluation System")
   .version("2.0.0");
 
 program
   .command("init")
   .description("Configure ASST environment (API Keys)")
   .action(async () => {
-    intro(theme.brand(" ASST Terminal: Initialization "));
     await ensureConfig();
-    outro(theme.accent("Initialization complete!"));
+    console.log(renderPanel(
+      chalk.hex(theme.c.green)("✓ Initialization complete!"),
+      { title: "Init", borderColor: theme.c.green, padding: 1 }
+    ));
   });
 
 program
@@ -82,12 +94,15 @@ program
   .description("Run a deterministic 6-agent security scan")
   .option("-r, --repo <path>", "Path to project root (default: current directory)")
   .option("--json", "Output raw JSON for CI/CD pipelines")
-  .action(async (options) => {
+  .action(async (options: any) => {
     try {
       await ensureConfig();
       await scanCommand({ repo: options.repo, json: options.json });
     } catch (error: any) {
-      console.error("\n" + theme.error("Scan Error:") + " " + error.message);
+      console.log(renderPanel(
+        chalk.hex(theme.c.red)(error.message),
+        { title: "Scan Error", borderColor: theme.c.red, padding: 1 }
+      ));
       process.exit(1);
     }
   });
@@ -96,21 +111,29 @@ program
   .command("chat")
   .description("Start an interactive multi-agent chat session")
   .option("-m, --model <model>", "Override orchestrator model")
-  .action(async (options) => {
+  .option("-r, --repo <path>", "Path to target repository (default: current directory)")
+  .action(async (options: any) => {
     try {
       await ensureConfig();
       const model = options.model || config.model || "gemini-2.5-flash";
-      await chatCommand({ model });
+      const repo = options.repo || process.env.ARES_REPO_ROOT || undefined;
+      await chatCommand({ model, repo });
     } catch (error: any) {
       if (error.code === 'ERR_MODULE_NOT_FOUND') {
-        console.error(theme.error("\nModule Loading Error: ") + "One of the internal components could not be loaded.");
-        console.log(theme.info("Try running 'npm install' or check the file paths."));
+        console.log(renderPanel(
+          chalk.hex(theme.c.red)("Module Loading Error\n\n") +
+          chalk.hex(theme.c.text)("One of the internal components could not be loaded.\n") +
+          chalk.hex(theme.c.textDim)("Try running 'pnpm install' or check the file paths."),
+          { title: "Error", borderColor: theme.c.red, padding: 1 }
+        ));
       } else {
-        console.error("\n" + theme.error("Chat Error:") + " " + error.message);
+        console.log(renderPanel(
+          chalk.hex(theme.c.red)(error.message),
+          { title: "Chat Error", borderColor: theme.c.red, padding: 1 }
+        ));
       }
-      
-      // Keep terminal open on error
-      console.log(theme.accent("\n[DEBUG] Press Enter to close this window..."));
+
+      console.log(chalk.hex(theme.c.textDim)("\n  Press Enter to close...\n"));
       process.stdin.setRawMode(false);
       process.stdin.resume();
       await new Promise(resolve => process.stdin.once("data", resolve));
@@ -122,25 +145,123 @@ program
   .command("skills")
   .description("List and inspect installed blockint skills")
   .option("-i, --info <name>", "Show details for a specific skill")
-  .action(async (options) => {
+  .action(async (options: any) => {
     try {
       await skillsCommand({ info: options.info });
     } catch (error: any) {
-      console.error("\n" + theme.error("Skills Error:") + " " + error.message);
+      console.log(renderPanel(
+        chalk.hex(theme.c.red)(error.message),
+        { title: "Skills Error", borderColor: theme.c.red, padding: 1 }
+      ));
     }
   });
 
+program
+  .command("diff")
+  .description("Compare two assurance manifests side-by-side")
+  .option("-l, --left <path>", "Path to the older manifest")
+  .option("-r, --right <path>", "Path to the newer manifest")
+  .action(async (options: any) => {
+    try {
+      await diffCommand({ left: options.left, right: options.right });
+    } catch (error: any) {
+      console.log(renderPanel(
+        chalk.hex(theme.c.red)(error.message),
+        { title: "Diff Error", borderColor: theme.c.red, padding: 1 }
+      ));
+    }
+  });
+
+program
+  .command("watch")
+  .description("Continuously monitor files for security issues")
+  .option("-r, --repo <path>", "Path to project root (default: current directory)")
+  .option("-i, --interval <ms>", "Check interval in milliseconds (default: 2000)", parseInt)
+  .action(async (options: any) => {
+    try {
+      await watchCommand({ repo: options.repo, interval: options.interval });
+    } catch (error: any) {
+      console.log(renderPanel(
+        chalk.hex(theme.c.red)(error.message),
+        { title: "Watch Error", borderColor: theme.c.red, padding: 1 }
+      ));
+    }
+  });
+
+// ─── Main ────────────────────────────────────────────────────
+
 async function main() {
   try {
-    // Default to chat if no command specified
     if (process.argv.length <= 2) {
-      await ensureConfig();
-      await chatCommand({ model: config.model || "gemini-2.5-flash" });
+      // No command — show banner and interactive command picker
+      console.clear();
+      console.log(renderBanner({
+        subtitle: "Automated Resilience Evaluation System",
+        version: "2.0.0",
+        items: [
+          { label: "Docs", value: "https://github.com/ASST" },
+        ],
+      }));
+      console.log("");
+
+      const c = theme.c;
+
+      const { select } = await import("@clack/prompts");
+
+      const chosen = await select({
+        message: chalk.hex(c.cyan).bold("Select a command"),
+        options: [
+          { value: "chat",   label: chalk.hex(c.white)("💬  Chat"),     hint: "Interactive AI-powered security chat" },
+          { value: "scan",   label: chalk.hex(c.white)("🔍  Scan"),     hint: "Full 6-agent deterministic security scan" },
+          { value: "watch",  label: chalk.hex(c.white)("👁   Watch"),    hint: "Continuous real-time file monitoring" },
+          { value: "diff",   label: chalk.hex(c.white)("📊  Diff"),     hint: "Compare assurance manifests" },
+          { value: "skills", label: chalk.hex(c.white)("🧠  Skills"),   hint: "List installed intelligence skills" },
+          { value: "init",   label: chalk.hex(c.white)("⚙️   Init"),     hint: "Configure API keys and environment" },
+        ],
+      });
+
+      if (typeof chosen === "symbol" || !chosen) {
+        console.log(chalk.hex(c.textDim)("\n  Goodbye.\n"));
+        return;
+      }
+
+      console.log("");
+
+      switch (chosen) {
+        case "chat":
+          await ensureConfig();
+          await chatCommand({ model: config.model || "gemini-2.5-flash", repo: process.env.ARES_REPO_ROOT });
+          break;
+        case "scan":
+          await ensureConfig();
+          await scanCommand({ repo: process.env.ARES_REPO_ROOT });
+          break;
+        case "watch":
+          await watchCommand({});
+          break;
+        case "diff":
+          await diffCommand({});
+          break;
+        case "skills":
+          await skillsCommand({});
+          break;
+        case "init":
+          await ensureConfig();
+          console.log(renderPanel(
+            chalk.hex(c.green)("✓ Initialization complete!"),
+            { title: "Init", borderColor: c.green, padding: 1 }
+          ));
+          break;
+      }
+
     } else {
       await program.parseAsync(process.argv);
     }
   } catch (error: any) {
-    console.error(theme.error("Fatal Execution Error:"), error.message);
+    console.log(renderPanel(
+      chalk.hex(theme.c.red)(error.message),
+      { title: "Fatal Error", borderColor: theme.c.red, padding: 1 }
+    ));
     await new Promise(resolve => setTimeout(resolve, 5000));
   }
 }

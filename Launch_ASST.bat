@@ -2,22 +2,27 @@
 setlocal enabledelayedexpansion
 
 :: ================================================
-:: ASST CLI Agent Launcher (V7 - MULTI-AGENT)
-:: Orchestrator: gemini-2.5-flash (reasoning)
-:: Sub-agents: 6 specialized security analysts
+:: ARES CLI Launcher (v2.0 - TUI Edition)
+:: Automated Resilience Evaluation System
 :: ================================================
 
-set "ROOT=C:\Users\FTHMo\OneDrive\Documents\ASST"
-set "CLI_DIR=%ROOT%\apps\asst-cli"
+set "ROOT=%~dp0"
+set "CLI_DIR=%ROOT%apps\asst-cli"
 
-echo [ASST] Launching Multi-Agent Security Shell (V7)...
-echo.
+:: Enable UTF-8 for box-drawing characters
+chcp 65001 >nul 2>&1
 
-:: Navigate to CLI directory
+:: Enable ANSI colors in CMD
+reg add HKCU\Console /v VirtualTerminalLevel /t REG_DWORD /d 1 /f >nul 2>&1
+
+:: Pass the project root to the CLI (stripping the trailing backslash to prevent \" escaping issues)
+set "ARES_REPO_ROOT=%ROOT:~0,-1%"
+
 cd /d "%CLI_DIR%"
 
-:: Run the bundled version for maximum stability
-:: Using 'cmd /k' so the window stays open even after the session ends
-cmd /k "node dist/cli.cjs chat"
-
-:: The user is now in a persistent CMD window with the agent output visible.
+:: Default to 'chat' if no arguments provided
+if "%~1"=="" (
+    cmd /k "node dist/asst.js chat --repo "%ARES_REPO_ROOT%""
+) else (
+    cmd /k "node dist/asst.js %*"
+)

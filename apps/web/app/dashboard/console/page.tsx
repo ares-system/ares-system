@@ -1,251 +1,177 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { 
+  Zap, 
+  Terminal as TerminalIcon, 
+  Play, 
+  Square, 
+  ShieldCheck, 
+  Activity, 
+  Cpu, 
+  Search, 
+  Lock,
+  ChevronRight
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useState, useRef, useEffect } from "react";
 
-const UserIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-);
-const SystemIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
-);
-const ActionIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-);
-const AgentIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-);
+interface LogEntry {
+  id: string;
+  source: string;
+  level: 'info' | 'warn' | 'error' | 'security';
+  message: string;
+  timestamp: string;
+}
 
-export default function AgentConsole() {
-  const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<Message[]>([
-    { id: "msg_1", type: "system", text: "ASST SecOps Agent initialized v0.1.0" },
-    { id: "msg_2", type: "system", text: "Loaded 11 tools: solana_rpc, git_diff, write_manifest, merge_findings, account_snapshot, cpi_mapper, secret_scanner, env_hygiene, posture_report, program_analyzer, upgrade_monitor" },
-    { id: "msg_3", type: "agent", text: "I am ready to perform a full assurance run or answer security questions about your repository." }
+export default function ConsolePage() {
+  const [mounted, setMounted] = useState(false);
+  const [logs, setLogs] = useState<LogEntry[]>([
+    { id: '1', source: 'Orchestrator', level: 'info', message: 'ARES System v2.5.0 Initialized. Secure buffer active.', timestamp: new Date().toISOString() },
+    { id: '2', source: 'NetworkScan', level: 'info', message: 'Boundary scan complete: 4 new endpoints identified.', timestamp: new Date().toISOString() },
+    { id: '3', source: 'SolanaAuditor', level: 'warn', message: 'Suspicious PDA pattern detected on manifest commit sha: 7f8a2...', timestamp: new Date().toISOString() },
+    { id: '4', source: 'PolicyEngine', level: 'security', message: 'Enforcing immutable lock on high-value treasury vault.', timestamp: new Date().toISOString() },
   ]);
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [thinkingIndex, setThinkingIndex] = useState(0);
-  const [toolModel, setToolModel] = useState("gemini-2.5-flash");
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  const thinkingStates = [
-    "Triggering LangChain backend...",
-    "Analyzing repository context...",
-    "Selecting appropriate SEC-OPS tools...",
-    "Executing local security analysis...",
-    "Synthesizing findings..."
-  ];
-
-  // Cycle through thinking states while loading
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isLoading) {
-      interval = setInterval(() => {
-        setThinkingIndex((prev) => (prev + 1) % thinkingStates.length);
-      }, 2500); // Change text every 2.5 seconds
-    } else {
-      setThinkingIndex(0);
-    }
-    return () => clearInterval(interval);
-  }, [isLoading, thinkingStates.length]);
-
-  const handleCommand = async (cmd: string) => {
-    setMessages(prev => [...prev, { id: crypto.randomUUID(), type: "user", text: cmd }]);
-    setInput("");
-    setIsLoading(true);
-    setThinkingIndex(0);
-    
-    const actionId = crypto.randomUUID();
-    // Optimistic action (will be dynamically overridden during render but we store a placeholder)
-    setMessages(prev => [
-      ...prev, 
-      { id: actionId, type: "action", text: "THINKING_PLACEHOLDER" }
-    ]);
-    
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: cmd, toolModel })
-      });
-      
-      const data = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(data.details || data.error || "Unknown Error");
-      }
-      
-      setMessages(prev => {
-        // Remove the thinking placeholder and add the final response
-        const filtered = prev.filter(m => m.id !== actionId);
-        return [...filtered, { id: crypto.randomUUID(), type: "agent", text: data.response }];
-      });
-    } catch (e: any) {
-      setMessages(prev => {
-        const filtered = prev.filter(m => m.id !== actionId);
-        return [...filtered, { id: crypto.randomUUID(), type: "system", text: `API Error: ${e.message}` }];
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
-    handleCommand(input);
-  };
+    setMounted(true);
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [logs]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 128px)" }}>
-      <h1 style={{ fontSize: "36px", marginBottom: "32px", fontFamily: "var(--font-serif)" }}>Agent Console</h1>
-      
-      <div className="whisper-shadow bg-surface" style={{ 
-        flex: 1, 
-        borderRadius: "var(--radius-xl)", 
-        display: "flex", 
-        flexDirection: "column",
-        overflow: "hidden"
-      }}>
-        {/* Chat area */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
-          {messages.map((msg) => (
-            <div key={msg.id} style={{ 
-              display: "flex", 
-              gap: "16px",
-              fontFamily: msg.type === "action" || msg.type === "system" ? "var(--font-mono)" : "var(--font-sans)",
-              fontSize: msg.type === "action" || msg.type === "system" ? "13px" : "15px",
-              color: msg.type === "system" ? "var(--text-tertiary)" :
-                     msg.type === "action" ? "var(--brand-coral)" :
-                     msg.type === "user" ? "var(--text-primary)" : "var(--text-secondary)",
-              lineHeight: "1.6"
-            }}>
-              <div style={{ 
-                width: "28px", 
-                height: "28px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: msg.type === "agent" ? "var(--brand-terracotta)" : "var(--text-tertiary)",
-                marginTop: msg.type === "agent" || msg.type === "user" ? "2px" : "0px",
-                background: msg.type === "agent" ? "var(--bg-parchment)" : "transparent",
-                borderRadius: "6px",
-                flexShrink: 0
-              }}>
-                {msg.type === "user" ? <UserIcon /> : msg.type === "agent" ? <AgentIcon /> : msg.type === "action" ? <ActionIcon /> : <SystemIcon />}
-              </div>
-              <div style={{ flex: 1, whiteSpace: "pre-wrap" }}>
-                {msg.text === "THINKING_PLACEHOLDER" ? (
-                  <span className="animate-pulse">{thinkingStates[thinkingIndex]}</span>
-                ) : (
-                  msg.text.split(/(\*\*.*?\*\*|\n|\[REPORT:.*?\])/g).map((part, i) => {
-                    if (part.startsWith('**') && part.endsWith('**')) {
-                      return <strong key={i} style={{ color: "var(--text-primary)", fontWeight: "600" }}>{part.slice(2, -2)}</strong>;
-                    }
-                    if (part.startsWith('[REPORT:') && part.endsWith(']')) {
-                      const repoName = part.slice(8, -1);
-                      return (
-                        <div key={i} style={{ marginTop: "12px" }}>
-                          <button 
-                            onClick={() => window.open(`/api/report?repo=${repoName}`, "_blank")} 
-                            style={{ 
-                              background: "var(--brand-terracotta)", 
-                              border: "none", 
-                              padding: "8px 16px", 
-                              borderRadius: "var(--radius-md)", 
-                              color: "white", 
-                              fontSize: "14px", 
-                              cursor: "pointer",
-                              fontWeight: "600",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "8px",
-                              boxShadow: "0 4px 12px rgba(181, 76, 56, 0.25)"
-                            }}
-                          >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                            View Finalized {repoName} Report (PDF)
-                          </button>
-                        </div>
-                      );
-                    }
-                    if (part === '\n') {
-                      return <br key={i} />;
-                    }
-                    return <span key={i}>{part}</span>;
-                  })
-                )}
-              </div>
-            </div>
-          ))}
+    <div className="h-full flex flex-col space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-700">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 overflow-hidden">
+        <div>
+          <p className="text-[12px] font-sans font-semibold text-primary uppercase tracking-[0.2em] mb-3">Runtime Execution</p>
+          <h1 className="text-5xl font-serif font-medium tracking-tight text-foreground mb-4">Operator Console</h1>
+          <p className="text-lg text-muted-foreground max-w-2xl leading-relaxed">
+            A real-time telemetry stream from the autonomous analysis engine. 
+            Direct interaction with agent logical reasoning buffers.
+          </p>
         </div>
-
-        {/* Quick Actions */}
-        <div style={{ padding: "16px 24px", borderTop: "1px solid var(--border-light)", display: "flex", gap: "12px", flexWrap: "wrap", background: "var(--bg-elevated)" }}>
-          <span style={{ fontSize: "12px", color: "var(--text-tertiary)", alignSelf: "center", textTransform: "uppercase", letterSpacing: "0.5px" }}>Actions</span>
-          <button onClick={() => handleCommand("Run full assurance lane")} style={{ 
-            background: "var(--bg-surface)", border: "1px solid var(--border-light)", padding: "6px 12px", borderRadius: "100px", color: "var(--text-secondary)", fontSize: "13px", cursor: "pointer" 
-          }}>▶ Full Assurance</button>
-          <button onClick={() => handleCommand("Scan uncommitted changes")} style={{ 
-            background: "var(--bg-surface)", border: "1px solid var(--border-light)", padding: "6px 12px", borderRadius: "100px", color: "var(--text-secondary)", fontSize: "13px", cursor: "pointer" 
-          }}>🔍 Scan Diff</button>
-          <button onClick={() => handleCommand("Analyze program accounts for specific PDA issues")} style={{ 
-            background: "var(--bg-surface)", border: "1px solid var(--border-light)", padding: "6px 12px", borderRadius: "100px", color: "var(--text-secondary)", fontSize: "13px", cursor: "pointer" 
-          }}>🏦 Account Analysis</button>
-
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ fontSize: "12px", color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Tooling Model:</span>
-            <select 
-              value={toolModel} 
-              onChange={(e) => setToolModel(e.target.value)}
-              style={{
-                background: "var(--bg-surface)",
-                border: "1px solid var(--border-light)",
-                borderRadius: "4px",
-                color: "var(--text-secondary)",
-                padding: "4px 8px",
-                fontSize: "13px",
-                outline: "none",
-                cursor: "pointer"
-              }}
-            >
-              <option value="gemini-2.5-flash">⭐ Google Gemini 2.5 Flash (Recommended)</option>
-              <option value="gemini-2.0-flash-001">Google Gemini 2.0 Flash (Stable)</option>
-              <option value="meta-llama/llama-3.3-70b-instruct:free">Meta Llama 3.3 70B (OpenRouter)</option>
-              <option value="qwen/qwen3-coder:free">Qwen3 Coder (OpenRouter)</option>
-              <option value="qwen/qwen3-next-80b-a3b-instruct:free">Qwen3 Next 80B (OpenRouter)</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Input area */}
-        <form onSubmit={handleSubmit} style={{ padding: "16px 24px", borderTop: "1px solid var(--border-strong)", display: "flex", gap: "16px", background: "var(--bg-parchment)" }}>
-          <input 
-            type="text" 
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask the security agent to perform a task..." 
-            style={{ 
-              flex: 1,
-              background: "transparent", 
-              border: "none",
-              color: "var(--text-primary)",
-              fontSize: "16px",
-              outline: "none"
-            }} 
-          />
-          <button type="submit" disabled={!input.trim()} style={{ 
-            background: input.trim() ? "var(--brand-terracotta)" : "var(--bg-elevated)", 
-            border: "none",
-            padding: "8px 24px",
-            borderRadius: "var(--radius-lg)",
-            color: input.trim() ? "#faf9f5" : "var(--text-tertiary)",
-            fontWeight: "500",
-            cursor: input.trim() ? "pointer" : "not-allowed",
-            transition: "all 0.2s"
-          }}>
-            Send
+        <div className="flex gap-3 shrink-0">
+          <button className="flex items-center gap-2 px-5 py-2.5 bg-secondary text-secondary-foreground rounded-xl text-[14px] font-medium hover:bg-muted transition-all ring-shadow">
+            <Square className="w-4 h-4" />
+            Terminate All
           </button>
-        </form>
+          <button className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl text-[14px] font-medium hover:opacity-90 transition-all shadow-xl shadow-primary/20">
+            <Play className="w-4 h-4" />
+            Resume System
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 flex-1 min-h-[600px]">
+        {/* Main Terminal View */}
+        <div className="lg:col-span-3 flex flex-col h-full overflow-hidden whisper-shadow">
+           <div className="bg-[#141413] border border-[#30302e] rounded-2xl flex flex-col h-full overflow-hidden">
+              {/* Terminal Header */}
+              <div className="px-6 py-4 border-b border-[#30302e] bg-[#1a1a18] flex items-center justify-between">
+                 <div className="flex items-center gap-2">
+                    <TerminalIcon className="w-4 h-4 text-primary" />
+                    <span className="text-xs font-mono text-warm-silver font-bold uppercase tracking-widest text-[#b0aea5]">ASST: Autonomous Shell</span>
+                 </div>
+                 <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 text-[10px] font-mono text-[#87867f] uppercase tracking-tighter">
+                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                       Synchronized
+                    </div>
+                    <div className="h-4 w-px bg-[#30302e]" />
+                    <button className="text-[#87867f] hover:text-[#faf9f5] transition-colors p-1">
+                       <ChevronRight className="w-4 h-4 rotate-90" />
+                    </button>
+                 </div>
+              </div>
+
+              {/* Logs Stream */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-3 font-mono text-[14px]">
+                 {mounted && logs.map((log) => (
+                   <div key={log.id} className="flex gap-4 group">
+                      <span className="text-[#5e5d59] shrink-0 w-24">[{new Date(log.timestamp).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
+                      <span className={cn(
+                        "shrink-0 w-32 font-bold px-2 rounded",
+                        log.level === 'info' ? "text-blue-400 bg-blue-400/5" : 
+                        log.level === 'warn' ? "text-amber-400 bg-amber-400/5" : 
+                        log.level === 'security' ? "text-emerald-400 bg-emerald-400/5" : "text-rose-400 bg-rose-400/5"
+                      )}>&gt; {log.source.toUpperCase()}</span>
+                      <span className="text-[#faf9f5] leading-relaxed break-words">{log.message}</span>
+                   </div>
+                 ))}
+                 <div className="flex gap-4">
+                    <span className="text-primary animate-pulse shrink-0 w-24 border-r border-[#30302e] inline-block">_</span>
+                    <input 
+                      type="text" 
+                      placeholder="Enter command (e.g., scan --target=manifest.json)..." 
+                      className="bg-transparent border-none p-0 focus:ring-0 text-[#faf9f5] w-full placeholder:text-[#5e5d59] mt-[-2px]" 
+                    />
+                 </div>
+                 <div ref={bottomRef} />
+              </div>
+
+              {/* Footer status */}
+              <div className="px-6 py-3 border-t border-[#30302e] bg-[#1a1a18] flex items-center justify-between text-[10px] font-mono uppercase tracking-[0.2em] text-[#5e5d59]">
+                 <div className="flex items-center gap-6">
+                    <span>CPU: 12%</span>
+                    <span>MEM: 1.4GB</span>
+                    <span>QUEUE: 0</span>
+                 </div>
+                 <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-3 h-3 text-emerald-500" />
+                    Secure Sandbox: ACTIVE
+                 </div>
+              </div>
+           </div>
+        </div>
+
+        {/* Console Side Panel - System Context */}
+        <div className="space-y-6">
+           <div className="ares-card p-6 bg-secondary/10 whisper-shadow">
+              <h3 className="text-lg font-serif font-medium mb-6 flex items-center gap-2">
+                 <Zap className="w-4 h-4 text-primary" />
+                 Active Buffers
+              </h3>
+              <div className="space-y-4">
+                 <div className="p-4 rounded-xl bg-card border border-border space-y-2 group hover:ring-shadow transition-all">
+                    <div className="flex justify-between items-center text-[11px] font-mono uppercase tracking-widest text-muted-foreground font-bold">
+                       <span>Context Pool</span>
+                       <span className="text-primary">82%</span>
+                    </div>
+                    <div className="h-1 bg-secondary rounded-full overflow-hidden">
+                       <div className="h-full bg-primary w-[82%]" />
+                    </div>
+                 </div>
+                 <div className="p-4 rounded-xl bg-card border border-border space-y-2">
+                    <div className="flex justify-between items-center text-[11px] font-mono uppercase tracking-widest text-muted-foreground font-bold">
+                       <span>Model Latency</span>
+                       <span className="text-emerald-500">Normal</span>
+                    </div>
+                    <p className="text-[13px] text-foreground font-sans">184ms RTT (Gemini 3 Flash)</p>
+                 </div>
+              </div>
+           </div>
+
+           <div className="ares-card p-6 bg-secondary/10 whisper-shadow flex-1">
+              <h3 className="text-lg font-serif font-medium mb-6 flex items-center gap-2">
+                 <Activity className="w-4 h-4 text-primary" />
+                 Memory Map
+              </h3>
+              <div className="space-y-3 opacity-60 italic text-[13px]">
+                 <p className="flex items-center gap-2 group hover:text-foreground hover:opacity-100 transition-all cursor-pointer">
+                    <Lock className="w-3.5 h-3.5" />
+                    Treasury_Contract.sol:412
+                 </p>
+                 <p className="flex items-center gap-2 group hover:text-foreground hover:opacity-100 transition-all cursor-pointer">
+                    <Search className="w-3.5 h-3.5" />
+                    Vulnerability_Pattern_DB
+                 </p>
+                 <p className="flex items-center gap-2 group hover:text-foreground hover:opacity-100 transition-all cursor-pointer">
+                    <Cpu className="w-3.5 h-3.5" />
+                    Agent_State_Vector_v4
+                 </p>
+              </div>
+           </div>
+        </div>
       </div>
     </div>
   );

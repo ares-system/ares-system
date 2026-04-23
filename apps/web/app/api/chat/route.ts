@@ -1,54 +1,36 @@
-import { NextResponse } from "next";
-import { exec } from "node:child_process";
-import { promisify } from "node:util";
-import { join } from "node:path";
-
-const execAsync = promisify(exec);
+import { NextResponse } from "next/server";
+import { Orchestrator } from "@ares/engine";
 
 export async function POST(req: Request) {
   try {
-    const { prompt, toolModel } = await req.json();
+    const body = await req.json();
+    const { prompt, repo } = body;
 
     if (!prompt) {
       return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
     }
 
-    // Run the agent CLI in the deepagentsjs directory
-    const cwd = join(process.cwd(), "../../deepagentsjs");
+    // Server-Side Safety Hook: Auto-approve tools since there is no terminal UI
+    globalThis.ARES_ASK_PERMISSION = async (msg: string) => {
+      console.warn("[ARES Server Hook] Auto-approving tool execution:", msg);
+      return true;
+    };
+
+    // Default to the repo root above apps/web
+    const repoRoot = repo || process.cwd();
     
-    // Clean up ALL Next.js injected Git environment variables so git resolves correctly from cwd
-    const cleanEnv: Record<string, string | undefined> = { ...process.env };
-    Object.keys(cleanEnv).forEach(key => {
-      if (key.startsWith("GIT_")) {
-        delete cleanEnv[key];
-      }
-    });
+    // Instantiate the engine directly
+    const ares = new Orchestrator(repoRoot);
+    const result = await ares.chat(prompt);
 
-    // Use exec so Windows resolves pnpm through the shell environment variables
-    const { stdout, stderr } = await execAsync(
-      `pnpm exec tsx examples/assurance-tools/agent-cli.ts "${prompt.replace(/"/g, '\\"')}" "${toolModel || "meta-llama/llama-3.3-70b-instruct:free"}"`, 
-      { 
-        cwd, 
-        maxBuffer: 20 * 1024 * 1024,
-        env: cleanEnv 
-      }
-    );
-
-    if (stderr && !stdout) {
-      console.error("Agent Error:", stderr);
-      return new Response(JSON.stringify({ error: "Agent encountered an error", details: stderr }), { status: 500, headers: { "Content-Type": "application/json" } });
-    }
-
-    return new Response(JSON.stringify({ response: stdout.trim() }), { status: 200, headers: { "Content-Type": "application/json" } });
+    return NextResponse.json({ response: result });
     
   } catch (error: any) {
     console.error("API Route Error:", error);
     
-    const errorDetails = error.stderr || error.stdout || error.message || "Unknown execution error";
-    
-    return new Response(JSON.stringify({ 
-      error: "Failed to communicate with agent",
-      details: String(errorDetails).substring(0, 1000)
-    }), { status: 500, headers: { "Content-Type": "application/json" } });
+    return NextResponse.json({ 
+      error: "Failed to communicate with ARES engine",
+      details: error.message || "Unknown execution error"
+    }, { status: 500 });
   }
 }

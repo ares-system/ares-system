@@ -59,7 +59,12 @@ export const runTerminalCmdTool = tool(async ({ command, explanation }) => {
         return "Action cancelled by user.";
     }
     try {
-        const { stdout, stderr } = await execAsync(command);
+        const { stdout, stderr } = await execAsync(command, {
+            shell: process.platform === "win32" ? "cmd.exe" : "/bin/sh",
+            timeout: 60_000, // 60s hard cap — prevent agent-triggered hangs
+            maxBuffer: 10 * 1024 * 1024, // 10 MB output cap
+            env: { ...process.env },
+        });
         return `STDOUT:\n${stdout}\n\nSTDERR:\n${stderr}`;
     }
     catch (e) {

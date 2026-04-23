@@ -1,0 +1,8 @@
+{
+  "name": "ares-workspace",
+  "private": true,
+  "scripts": {
+    "build": "pnpm -r run build",
+    "dev": "pnpm -r run dev"
+  }
+}

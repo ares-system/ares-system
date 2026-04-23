@@ -1,12 +1,15 @@
 import { intro, outro, text, spinner } from "@clack/prompts";
 import { theme } from "../ui/theme.js";
-import { ASSTAgentEngine } from "../engine/agent.js";
-export async function chatCommand() {
+import { Orchestrator } from "../engine/orchestrator.js";
+export async function chatCommand(options) {
     const repoRoot = process.cwd();
-    const agent = new ASSTAgentEngine(repoRoot);
-    await agent.init();
-    intro(theme.accent(" ASST INTERACTIVE SHELL "));
-    console.log(theme.info("Type 'exit' to quit. Context: ") + theme.repo(repoRoot));
+    const orchestrator = new Orchestrator(repoRoot);
+    await orchestrator.init();
+    intro(theme.accent(" ASST MULTI-AGENT SHELL "));
+    console.log(theme.info("Architecture: ") + "Orchestrator → 6 sub-agents");
+    console.log(theme.info("Orchestrator: ") + "gemini-2.5-flash (reasoning)");
+    console.log(theme.info("Context: ") + theme.repo(repoRoot));
+    console.log(theme.info("Type 'exit' to quit.\n"));
     while (true) {
         const userInput = await text({
             message: theme.brand("User >"),
@@ -20,9 +23,10 @@ export async function chatCommand() {
             break;
         }
         const s = spinner();
-        s.start("ASST is thinking...");
         try {
-            const response = await agent.chat(userInput);
+            const response = await orchestrator.chat(userInput, (status) => {
+                s.start(status);
+            });
             s.stop("Response generated.");
             console.log(`\n${theme.accent("ASST >")} ${response}\n`);
         }
@@ -31,6 +35,6 @@ export async function chatCommand() {
             console.error(e.message);
         }
     }
-    await agent.close();
+    await orchestrator.close();
     outro(theme.brand(" Sessions saved. Goodbye! "));
 }

@@ -1,73 +1,105 @@
-import { intro, outro } from "@clack/prompts";
 import { theme } from "../ui/theme.js";
-import { listInstalledSkills } from "../engine/skill-loader.js";
+import { renderBanner } from "../ui/components/Banner.js";
+import { renderPanel, renderDivider } from "../ui/components/Panel.js";
+import { renderTable } from "../ui/components/Table.js";
+import { renderBadge } from "../ui/components/StatusBadge.js";
+import { listInstalledSkills } from "@ares/engine";
+import chalk from "chalk";
 
 export async function skillsCommand(options: { info?: string }) {
   const repoRoot = process.cwd();
   const skills = listInstalledSkills(repoRoot);
+  const c = theme.c;
 
   if (options.info) {
-    // Show details for a specific skill
-    const skill = skills.find(s => s.name === options.info);
+    // ─── Skill Detail View ─────────────────────────────────
+    const skill = skills.find((s: any) => s.name === options.info);
     if (!skill) {
-      console.log(theme.error(`Skill "${options.info}" not found.`));
-      console.log(theme.info("Run 'asst skills' to see all installed skills."));
+      console.log(renderPanel(
+        chalk.hex(c.red)(`Skill "${options.info}" not found.\n`) +
+        chalk.hex(c.textDim)("Run 'asst skills' to see all installed skills."),
+        { title: "Not Found", borderColor: c.red, padding: 1 }
+      ));
       return;
     }
-    console.log(theme.accent(`\n─── ${skill.name} ───\n`));
-    // Show first 40 lines of the skill content
+
     const preview = skill.content.split("\n").slice(0, 40).join("\n");
-    console.log(preview);
-    if (skill.content.split("\n").length > 40) {
-      console.log(theme.info(`\n... (${skill.content.split("\n").length - 40} more lines)`));
-      console.log(theme.info(`Full path: ${skill.path}`));
-    }
+    const totalLines = skill.content.split("\n").length;
+
+    console.log("");
+    console.log(renderPanel(
+      chalk.hex(c.text)(preview) +
+      (totalLines > 40 ? `\n\n${chalk.hex(c.textDim)(`... ${totalLines - 40} more lines`)}` : ""),
+      { title: skill.name, borderColor: c.cyan, padding: 1 }
+    ));
+    console.log(chalk.hex(c.textDim)(`  Path: ${skill.path}`));
+    console.log("");
     return;
   }
 
-  // List all skills
-  intro(theme.accent(" ASST INSTALLED SKILLS "));
+  // ─── List All Skills ──────────────────────────────────────
+
+  console.log("");
+  console.log(renderBanner({
+    compact: true,
+    subtitle: "Installed Security Skills",
+    version: "2.0.0",
+    items: [
+      { label: "Total", value: `${skills.length} skills loaded` },
+      { label: "Source", value: repoRoot },
+    ],
+  }));
+  console.log("");
 
   if (skills.length === 0) {
-    console.log(theme.warning("No skills installed."));
-    console.log(theme.info("Run: npx skills add agentic-reserve/blockint-skills --yes"));
-    outro("");
+    console.log(renderPanel(
+      chalk.hex(c.yellow)("No skills installed.\n\n") +
+      chalk.hex(c.text)("Install with:\n") +
+      chalk.hex(c.cyan)("  npx skills add agentic-reserve/blockint-skills --yes"),
+      { title: "Skills", borderColor: c.yellow, padding: 1 }
+    ));
     return;
   }
 
-  console.log(theme.info(`Found ${skills.length} skills in this repository:\n`));
-
-  // Categorize for display
-  const categories: Record<string, string[]> = {
-    "🔴 Solana Security": [],
-    "🟡 DeFi & Investigation": [],
-    "🔵 Compliance & Reference": [],
-    "⚪ Tools & Specs": []
+  // Categorize skills
+  const categories: Record<string, { icon: string; color: string; skills: string[] }> = {
+    "Solana Security":        { icon: "🔴", color: c.red,    skills: [] },
+    "DeFi & Investigation":   { icon: "🟡", color: c.yellow, skills: [] },
+    "Compliance & Reference": { icon: "🔵", color: c.blue,   skills: [] },
+    "Tools & Specs":          { icon: "⚪", color: c.textDim, skills: [] },
   };
 
   for (const s of skills) {
     const n = s.name;
     if (n.includes("solana") || n.includes("sealevel") || n.includes("neodyme") || n.includes("osec")) {
-      categories["🔴 Solana Security"].push(n);
-    } else if (n.includes("defi") || n.includes("rug") || n.includes("mev") || n.includes("flash") || 
+      categories["Solana Security"].skills.push(n);
+    } else if (n.includes("defi") || n.includes("rug") || n.includes("mev") || n.includes("flash") ||
                n.includes("honeypot") || n.includes("sandwich") || n.includes("investigat") || n.includes("audit")) {
-      categories["🟡 DeFi & Investigation"].push(n);
+      categories["DeFi & Investigation"].skills.push(n);
     } else if (n.includes("compliance") || n.includes("fatf") || n.includes("screening") || 
                n.includes("chainalysis") || n.includes("risk") || n.includes("phalcon")) {
-      categories["🔵 Compliance & Reference"].push(n);
+      categories["Compliance & Reference"].skills.push(n);
     } else {
-      categories["⚪ Tools & Specs"].push(n);
+      categories["Tools & Specs"].skills.push(n);
     }
   }
 
-  for (const [category, names] of Object.entries(categories)) {
-    if (names.length === 0) continue;
-    console.log(`${category} (${names.length})`);
-    for (const name of names) {
-      console.log(`  ${theme.repo("•")} ${name}`);
-    }
+  // Render each category as a panel
+  for (const [catName, cat] of Object.entries(categories)) {
+    if (cat.skills.length === 0) continue;
+
+    const content = cat.skills.map(name => {
+      return `  ${chalk.hex(c.cyan)("•")}  ${chalk.hex(c.text)(name)}`;
+    }).join("\n");
+
+    console.log(renderPanel(content, {
+      title: `${cat.icon} ${catName} (${cat.skills.length})`,
+      borderColor: cat.color,
+      padding: 0,
+    }));
     console.log("");
   }
 
-  outro(theme.brand(` ${skills.length} skills ready `));
+  console.log(renderDivider({ label: `${skills.length} skills ready` }));
+  console.log("");
 }

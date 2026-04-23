@@ -1,60 +1,26 @@
 import type { Metadata } from "next";
 import { Inter, DM_Serif_Display, JetBrains_Mono } from "next/font/google";
-import { siteUrl } from "@/lib/site";
-import { softwareApplicationJsonLd } from "@/lib/json-ld";
 import "./globals.css";
 
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-sans",
 });
+
 const dmSerif = DM_Serif_Display({
   weight: ["400"],
   subsets: ["latin"],
   variable: "--font-serif",
 });
+
 const jetBrainsMono = JetBrains_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
 });
 
-const base = siteUrl();
-
 export const metadata: Metadata = {
-  metadataBase: new URL(base),
-  title: {
-    default: "ARES Solana Security Tool (ASST)",
-    template: "%s | ASST",
-  },
-  description:
-    "Assurance Run for Solana: commit-bound manifests, merged SARIF, layered deep agents, sandboxed CLI — reproducible security evidence for developers.",
-  keywords: [
-    "Solana",
-    "security",
-    "SARIF",
-    "Assurance Run",
-    "ASST",
-    "ARES",
-    "static analysis",
-    "CI",
-  ],
-  robots: { index: true, follow: true },
-  alternates: { canonical: "/" },
-  openGraph: {
-    type: "website",
-    locale: "en_US",
-    url: base,
-    siteName: "ARES Solana Security Tool",
-    title: "ARES Solana Security Tool (ASST)",
-    description:
-      "Reproducible security orchestration for Solana: manifests, SARIF, deep agents.",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "ARES Solana Security Tool (ASST)",
-    description:
-      "Commit-bound assurance manifests and merged SARIF for Solana development.",
-  },
+  title: "ARES | Autonomous Security",
+  description: "AI-native security operations platform.",
 };
 
 export default function RootLayout({
@@ -62,14 +28,9 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const jsonLd = softwareApplicationJsonLd();
   return (
     <html lang="en" className={`${inter.variable} ${dmSerif.variable} ${jetBrainsMono.variable}`}>
-      <body>
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
+      <body className="font-sans antialiased">
         {children}
       </body>
     </html>
