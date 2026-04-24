@@ -2,133 +2,147 @@ import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join, relative, extname } from "node:path";
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
+import { makeFinding, makeToolResult, stringifyToolResult, toHumanSummary, } from "../findings/index.js";
 const ANCHOR_PATTERNS = [
-    // Critical - Missing signer checks
+    // — High-confidence, high-signal —
     {
-        name: "missing-signer-check",
-        severity: "Critical",
-        description: "Account used without #[account(signer)] or has_one constraint — potential unauthorized access",
-        regex: /pub\s+\w+\s*:\s*AccountInfo/g
+        ruleId: "anchor.unchecked-account",
+        title: "UncheckedAccount bypasses Anchor safety checks",
+        severity: "high",
+        confidence: "high",
+        description: "UncheckedAccount used — Anchor's type-based safety checks are disabled for this account.",
+        rationale: "If the program does not implement its own ownership/discriminator checks nearby, this is usually an exploitable gap.",
+        remediation: "Replace with a typed account (Account<'info, T>) or add explicit owner + discriminator checks in the handler.",
+        references: [
+            "https://github.com/coral-xyz/sealevel-attacks",
+            "https://book.anchor-lang.com/anchor_in_depth/the_accounts_struct.html",
+        ],
+        regex: /UncheckedAccount/g,
     },
     {
-        name: "unchecked-account",
-        severity: "Critical",
-        description: "UncheckedAccount used — bypasses all Anchor safety checks",
-        regex: /UncheckedAccount/g
-    },
-    // Critical - Unsafe math
-    {
-        name: "arithmetic-overflow",
-        severity: "Critical",
-        description: "Direct arithmetic without checked_* methods — risk of overflow/underflow",
-        regex: /(?<!\w)(amount|balance|supply|total|quantity|price)\s*[+\-*\/]=?\s*\w+/g
-    },
-    // High - Missing account validation
-    {
-        name: "missing-owner-check",
-        severity: "High",
-        description: "Account constraint without owner check — account may belong to wrong program",
-        regex: /#\[account\(\s*(?!.*owner\s*=)(?!.*constraint\s*=.*owner).*\)\]/g
+        ruleId: "anchor.state-after-transfer",
+        title: "State update after a transfer (CEI violation)",
+        severity: "high",
+        confidence: "medium",
+        description: "State update appears to happen after a SOL/token transfer — classic CEI (Checks-Effects-Interactions) violation.",
+        rationale: "Solana programs are not reentrant in the Ethereum sense, but write-after-transfer patterns often enable exploits via instruction reordering or CPI misuse.",
+        remediation: "Mutate state BEFORE invoking any transfer or CPI. Double-check the intended sequence.",
+        regex: /transfer\s*\(.*?\)[\s\S]{0,100}ctx\.accounts\.\w+\.\w+\s*=/g,
     },
     {
-        name: "missing-close-constraint",
-        severity: "High",
-        description: "init without close target — lamports will be lost when account is closed",
-        regex: /#\[account\(\s*init\s*(?!.*close\s*=)[^)]*\)\]/g
+        ruleId: "anchor.missing-close-constraint",
+        title: "`init` without a matching `close` target",
+        severity: "medium",
+        confidence: "medium",
+        description: "Account initialized without a visible `close = ` target; lamports may be stranded when the account is closed.",
+        rationale: "`init` creates an account; without a documented close path, rent may leak or be reclaimed by the wrong party.",
+        remediation: "Ensure every init has a corresponding close/free path and it routes to a known rent-recipient.",
+        regex: /#\[account\(\s*init\s*(?!.*close\s*=)[^)]*\)\]/g,
     },
-    // High - Authority patterns
+    // — Medium confidence — need human review —
     {
-        name: "upgrade-authority-not-checked",
-        severity: "High",
-        description: "Program does not verify upgrade authority — attacker could upgrade to malicious version",
-        regex: /set_upgrade_authority|upgrade_authority/g
-    },
-    // High - PDA issues
-    {
-        name: "pda-seed-collision",
-        severity: "High",
-        description: "PDA seeds use only 1 parameter — risk of seed collision between different users",
-        regex: /seeds\s*=\s*\[\s*[^\]]*\]\s*(?!.*,\s*\w)/g
-    },
-    // Medium - CPI safety
-    {
-        name: "unvalidated-cpi-target",
-        severity: "Medium",
-        description: "Cross-program invocation without verifying target program ID",
-        regex: /invoke(?:_signed)?\s*\(/g
+        ruleId: "anchor.raw-accountinfo",
+        title: "Raw AccountInfo in an accounts struct",
+        severity: "medium",
+        confidence: "medium",
+        description: "Raw `AccountInfo` used — no type or ownership validation by Anchor.",
+        rationale: "Skips Anchor's discriminator/owner/rent checks. May be intentional (e.g. system accounts) but often indicates missing validation.",
+        remediation: "Prefer typed `Account<'info, T>` or document the deliberate validation in-line.",
+        regex: /pub\s+\w+\s*:\s*AccountInfo/g,
     },
     {
-        name: "cpi-missing-signer-seeds",
-        severity: "Medium",
-        description: "CPI invoke without signer seeds — PDA may not be signing correctly",
-        regex: /invoke\s*\(\s*&\w+\s*,\s*&\[.*?\]\s*\)/g
-    },
-    // Medium - State management
-    {
-        name: "missing-realloc-zero",
-        severity: "Medium",
-        description: "Account realloc without zeroing — stale data could persist",
-        regex: /realloc\s*\(\s*\d+\s*,\s*false\s*\)/g
+        ruleId: "anchor.upgrade-authority-mentioned",
+        title: "Upgrade authority referenced",
+        severity: "medium",
+        confidence: "low",
+        description: "Code references upgrade authority — confirm it's locked or revocable only by timelock/multisig.",
+        rationale: "A match means upgrade authority is mentioned, not that it is misused. Used to direct human review toward admin takeover surface.",
+        regex: /set_upgrade_authority|upgrade_authority/g,
     },
     {
-        name: "unwrap-without-error",
-        severity: "Medium",
-        description: "Using .unwrap() instead of proper error handling — will panic on None/Err",
-        regex: /\.unwrap\(\)/g
-    },
-    // Medium - Access control
-    {
-        name: "missing-freeze-authority",
-        severity: "Medium",
-        description: "Mint/token operations without checking freeze authority",
-        regex: /freeze_authority/g
+        ruleId: "anchor.pda-single-seed",
+        title: "PDA seeds may be too narrow",
+        severity: "medium",
+        confidence: "low",
+        description: "PDA seeds look like they contain only a single element — verify no collisions between users.",
+        rationale: "Single-seed PDAs without a user/owner discriminator can collide. Regex is imperfect; confirm by reading the `seeds = [ ... ]` list.",
+        regex: /seeds\s*=\s*\[\s*[^\]]*\]\s*(?!.*,\s*\w)/g,
     },
     {
-        name: "missing-has-one",
-        severity: "Medium",
-        description: "Account struct without has_one constraints — related accounts not validated",
-        regex: /#\[account\(\s*mut\s*(?!.*has_one)[^)]*\)\]\s*\n\s*pub\s+\w+\s*:\s*Account/g
+        ruleId: "anchor.realloc-without-zero",
+        title: "`realloc` with `zero_init = false`",
+        severity: "medium",
+        confidence: "medium",
+        description: "Account `realloc` called with `zero_init = false` — stale bytes may remain after growth.",
+        rationale: "When growing an account, leaving old bytes intact can let an attacker reinterpret stale data as new state.",
+        remediation: "Pass `true` unless you've proven the grown region cannot be read as typed state.",
+        regex: /realloc\s*\(\s*\d+\s*,\s*false\s*\)/g,
     },
-    // Low - Best practices
+    // — Low / Informational — signal for humans, not alarms —
     {
-        name: "todo-in-code",
-        severity: "Low",
-        description: "TODO/FIXME/HACK comment found — incomplete implementation",
-        regex: /\/\/\s*(TODO|FIXME|HACK|XXX|UNSAFE)/gi
+        ruleId: "anchor.arithmetic-hotspot",
+        title: "Arithmetic on balance-like variable",
+        severity: "low",
+        confidence: "low",
+        description: "Arithmetic on a balance-like variable without obvious `checked_*` — verify overflow safety.",
+        rationale: "Rust's default arithmetic panics on overflow in debug but wraps in release; audit any use on user balances.",
+        remediation: "Prefer `checked_add` / `checked_sub` / `checked_mul` on all user-controlled arithmetic.",
+        regex: /(?<!\w)(amount|balance|supply|total|quantity|price)\s*[+\-*\/]=?\s*\w+/g,
     },
     {
-        name: "large-account-size",
-        severity: "Low",
-        description: "Account space > 10KB — consider if all data is necessary on-chain",
-        regex: /space\s*=\s*(\d{5,})/g
+        ruleId: "anchor.unwrap-usage",
+        title: "`.unwrap()` in on-chain code",
+        severity: "low",
+        confidence: "medium",
+        description: "`.unwrap()` found — prefer `?` or explicit error handling.",
+        rationale: "`.unwrap()` panics on None/Err, which on Solana translates to a program error but reveals little context.",
+        regex: /\.unwrap\(\)/g,
     },
     {
-        name: "missing-event-emit",
-        severity: "Informational",
-        description: "State mutation without emit! — off-chain services won't detect this change",
-        regex: /ctx\.accounts\.\w+\.\w+\s*=(?!.*emit!)/g
+        ruleId: "anchor.invoke-without-verification",
+        title: "Raw `invoke`/`invoke_signed`",
+        severity: "low",
+        confidence: "low",
+        description: "Raw `invoke` / `invoke_signed` call — ensure target program id and accounts are verified.",
+        rationale: "The regex cannot tell whether surrounding code verifies the CPI target; manual review required.",
+        regex: /invoke(?:_signed)?\s*\(/g,
     },
-    // Critical - Reentrancy
     {
-        name: "state-after-transfer",
-        severity: "Critical",
-        description: "State update after SOL/token transfer — classic reentrancy pattern",
-        regex: /transfer\s*\(.*?\)[\s\S]{0,100}ctx\.accounts\.\w+\.\w+\s*=/g
+        ruleId: "anchor.oracle-reference",
+        title: "Oracle / price feed referenced",
+        severity: "low",
+        confidence: "low",
+        description: "Code references an oracle/price feed — confirm staleness and confidence-interval checks are applied.",
+        rationale: "Signal only — a match doesn't imply a missing check. Used to direct review toward oracle handling.",
+        regex: /price_feed|get_price|oracle.*price/gi,
     },
-    // High - Oracle safety
     {
-        name: "missing-oracle-staleness",
-        severity: "High",
-        description: "Oracle price used without staleness check — stale prices can be manipulated",
-        regex: /price_feed|get_price|oracle.*price/gi
+        ruleId: "anchor.todo-in-code",
+        title: "TODO / FIXME comment",
+        severity: "info",
+        confidence: "high",
+        description: "TODO/FIXME/HACK comment found — incomplete implementation.",
+        rationale: "Direct syntactic match on common TODO-style markers.",
+        regex: /\/\/\s*(TODO|FIXME|HACK|XXX|UNSAFE)/gi,
     },
-    // Medium - Token safety
     {
-        name: "missing-decimals-check",
-        severity: "Medium",
-        description: "Token amount used without decimal normalization — precision loss risk",
-        regex: /amount\s*\*\s*10\s*\^|amount\.checked_mul|decimals/g
-    }
+        ruleId: "anchor.large-account-size",
+        title: "Account space > 10KB",
+        severity: "info",
+        confidence: "high",
+        description: "Account space > 10KB — consider whether all data must live on-chain.",
+        rationale: "Design observation; cost/perf signal, not a vulnerability.",
+        regex: /space\s*=\s*(\d{5,})/g,
+    },
+    {
+        ruleId: "anchor.state-mutation-without-event",
+        title: "State mutation without `emit!`",
+        severity: "info",
+        confidence: "low",
+        description: "State mutation without nearby `emit!` — off-chain indexers may miss the change.",
+        rationale: "Useful for protocols that rely on events, but many programs intentionally skip events for gas.",
+        regex: /ctx\.accounts\.\w+\.\w+\s*=(?!.*emit!)/g,
+    },
 ];
 // ─── File Walker ────────────────────────────────────────────────────
 function walkRustFiles(dir, maxDepth = 6, depth = 0) {
@@ -156,7 +170,7 @@ function walkRustFiles(dir, maxDepth = 6, depth = 0) {
     return result;
 }
 // ─── Scanner Logic ──────────────────────────────────────────────────
-function scanFile(filePath, rootDir) {
+function scanFile(filePath, rootDir, toolName) {
     const findings = [];
     let content;
     try {
@@ -166,85 +180,100 @@ function scanFile(filePath, rootDir) {
         return findings;
     }
     const lines = content.split("\n");
-    const relPath = relative(rootDir, filePath);
+    const relPath = relative(rootDir, filePath).replace(/\\/g, "/");
     for (const pattern of ANCHOR_PATTERNS) {
         const regex = new RegExp(pattern.regex.source, pattern.regex.flags);
         let match;
         while ((match = regex.exec(content)) !== null) {
-            // Find the line number
             const lineIndex = content.substring(0, match.index).split("\n").length;
             const snippetStart = Math.max(0, lineIndex - 2);
             const snippetEnd = Math.min(lines.length, lineIndex + 2);
-            const snippet = lines.slice(snippetStart, snippetEnd).join("\n");
-            findings.push({
+            const snippet = lines.slice(snippetStart, snippetEnd).join("\n").substring(0, 400);
+            findings.push(makeFinding({
+                tool: toolName,
+                ruleId: pattern.ruleId,
+                title: pattern.title,
+                kind: "vulnerability",
                 severity: pattern.severity,
-                pattern: pattern.name,
+                confidence: pattern.confidence,
                 description: pattern.description,
-                file: relPath,
-                line: lineIndex,
-                snippet: snippet.substring(0, 200)
-            });
+                rationale: pattern.rationale,
+                remediation: pattern.remediation,
+                references: pattern.references,
+                tags: ["solana", "anchor", "static-analysis"],
+                location: {
+                    kind: "source",
+                    file: relPath,
+                    startLine: lineIndex,
+                    snippet,
+                },
+            }));
         }
     }
     return findings;
 }
 // ─── Tool Definition ────────────────────────────────────────────────
+const TOOL_NAME = "anchor_source_scanner";
 const schema = z.object({
     projectPath: z.string().describe("Absolute path to the Anchor/Rust project root"),
-    programDir: z.string().optional().describe("Subdirectory containing programs (default: 'programs')")
+    programDir: z.string().optional().describe("Subdirectory containing programs (default: 'programs')"),
 });
+/**
+ * Runs the scan and returns BOTH a human-readable string (for the LLM)
+ * AND a typed ToolResult artifact (for dashboards, CI, SARIF export).
+ *
+ * We leave the return as a single JSON string for now so existing agents
+ * keep working unchanged; once SubAgent.invokeWithArtifacts() is wired,
+ * we'll flip responseFormat to "content_and_artifact".
+ */
 export const anchorSourceScannerTool = tool(async (input) => {
+    const started = Date.now();
     const rootDir = input.projectPath;
     const programDir = input.programDir || "programs";
-    const scanDir = join(rootDir, programDir);
-    if (!existsSync(scanDir)) {
-        // Fallback: scan src/ or the root
-        const altDirs = [join(rootDir, "src"), rootDir];
-        const useDir = altDirs.find(d => existsSync(d)) || rootDir;
-        return scanDirectory(useDir, rootDir);
-    }
-    return scanDirectory(scanDir, rootDir);
-}, {
-    name: "anchor_source_scanner",
-    description: "Static analysis tool for Anchor/Solana Rust source code. Scans .rs files for 19 vulnerability patterns including missing signer checks, arithmetic overflow, reentrancy, PDA seed collisions, and CPI safety issues. Returns structured findings with severity ratings.",
-    schema
-});
-function scanDirectory(scanDir, rootDir) {
+    const firstChoice = join(rootDir, programDir);
+    const scanDir = existsSync(firstChoice)
+        ? firstChoice
+        : [join(rootDir, "src"), rootDir].find((d) => existsSync(d)) ?? rootDir;
     const rsFiles = walkRustFiles(scanDir);
     if (rsFiles.length === 0) {
-        return JSON.stringify({
-            status: "no_files",
-            message: `No .rs files found in ${scanDir}`,
+        const empty = makeToolResult({
+            tool: TOOL_NAME,
+            status: "skipped",
             findings: [],
-            summary: { total: 0, critical: 0, high: 0, medium: 0, low: 0, informational: 0 }
+            humanSummary: `No .rs files found under ${scanDir}.`,
+            durationMs: Date.now() - started,
         });
+        return stringifyToolResult(empty);
     }
     const allFindings = [];
     for (const file of rsFiles) {
-        allFindings.push(...scanFile(file, rootDir));
+        allFindings.push(...scanFile(file, rootDir, TOOL_NAME));
     }
-    // Deduplicate by file+line+pattern
+    // Deduplicate by id (id already accounts for tool+rule+location).
     const seen = new Set();
-    const unique = allFindings.filter(f => {
-        const key = `${f.file}:${f.line}:${f.pattern}`;
-        if (seen.has(key))
+    const unique = allFindings.filter((f) => {
+        if (seen.has(f.id))
             return false;
-        seen.add(key);
+        seen.add(f.id);
         return true;
     });
-    // Sort by severity
-    const severityOrder = {
-        Critical: 0, High: 1, Medium: 2, Low: 3, Informational: 4
+    const result = makeToolResult({
+        tool: TOOL_NAME,
+        status: "ok",
+        findings: unique,
+        filesScanned: rsFiles.length,
+        durationMs: Date.now() - started,
+        meta: { scanDir: scanDir.replace(/\\/g, "/") },
+    });
+    // Provide a readable summary in the same envelope so hosts that ignore
+    // structure still get a usable string.
+    const withSummary = {
+        ...result,
+        humanSummary: toHumanSummary(result, 50),
     };
-    unique.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
-    const summary = {
-        total: unique.length,
-        critical: unique.filter(f => f.severity === "Critical").length,
-        high: unique.filter(f => f.severity === "High").length,
-        medium: unique.filter(f => f.severity === "Medium").length,
-        low: unique.filter(f => f.severity === "Low").length,
-        informational: unique.filter(f => f.severity === "Informational").length,
-        files_scanned: rsFiles.length
-    };
-    return JSON.stringify({ status: "complete", summary, findings: unique.slice(0, 50) }, null, 2);
-}
+    return stringifyToolResult(withSummary);
+}, {
+    name: TOOL_NAME,
+    description: "Heuristic static analysis for Anchor/Solana Rust source. Scans .rs files for ~13 rules (unchecked-account, raw-accountinfo, realloc-without-zero, arithmetic-hotspot, unwrap, CPI invoke, oracle references, …) and returns a structured ToolResult with Finding[] + summary. Regex-only hits default to medium or lower; use Semgrep rules for higher assurance.",
+    schema,
+});

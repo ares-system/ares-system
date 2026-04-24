@@ -1,15 +1,24 @@
+# ─── Secrets & env ────────────────────────────────────────────
 .env
 .env.*
 !.env.example
 
-# Local IDE / ephemeral workspace
+# ─── Local IDE / tool state ───────────────────────────────────
 .cursor/
+.asst/
 var/
 
+# ─── Build artifacts ──────────────────────────────────────────
 node_modules/
+dist/
+*.tsbuildinfo
+apps/web/.next/
 
-# Assurance Run manifests at repo root (CI uploads artifacts; ignore local/CI workspace copies if desired)
+# ─── Assurance runs & scan output (CI uploads these separately) ─
 /assurance/
-
-# Colosseum Copilot local scan output (may contain API response snippets)
 /scripts/copilot-scan-output.txt
+
+# ─── Ad-hoc logs that slipped into the repo historically ──────
+test_api*.log
+*.pdf
+!docs/**/*.pdf

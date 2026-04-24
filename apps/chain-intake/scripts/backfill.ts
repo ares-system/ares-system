@@ -57,6 +57,7 @@ async function main(): Promise<void> {
   let page = 0;
   let totalInserted = 0;
   let totalSkipped = 0;
+  let totalTriggers = 0;
 
   while (page < maxPages) {
     const batch = await fetchHistoryPage(base, apiKey, address, beforeSignature, limit);
@@ -64,13 +65,11 @@ async function main(): Promise<void> {
 
     const client = await pool.connect();
     try {
-      const { inserted, skipped } = await upsertParsedTransactions(
-        client,
-        batch,
-        "backfill",
-      );
+      const { inserted, skipped, triggersInserted } =
+        await upsertParsedTransactions(client, batch, "backfill");
       totalInserted += inserted;
       totalSkipped += skipped;
+      totalTriggers += triggersInserted;
 
       const lastSig = batch[batch.length - 1]?.signature;
       if (typeof lastSig === "string") {
@@ -89,7 +88,7 @@ async function main(): Promise<void> {
 
     page += 1;
     console.error(
-      `page ${page}: batch=${batch.length} inserted=${totalInserted} skipped=${totalSkipped}`,
+      `page ${page}: batch=${batch.length} inserted=${totalInserted} skipped=${totalSkipped} triggers=${totalTriggers}`,
     );
 
     if (batch.length < limit) break;
@@ -101,6 +100,7 @@ async function main(): Promise<void> {
       pages: page,
       inserted: totalInserted,
       skipped_duplicates: totalSkipped,
+      triggers_inserted: totalTriggers,
       watch_address: address,
     }),
   );

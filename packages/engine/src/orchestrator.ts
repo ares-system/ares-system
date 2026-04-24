@@ -1,9 +1,19 @@
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { HumanMessage, AIMessage, SystemMessage } from "@langchain/core/messages";
 import { createAllSubAgents, SUB_AGENT_CONFIGS, SubAgent } from "./sub-agents.js";
-import { ASSTPersistenceSQLite } from "./persistence-sqlite.js";
+import { ASSTPersistenceSQLite } from "./persistence/sqlite.js";
+import {
+  createModel,
+  DEFAULT_ORCHESTRATOR_MODEL,
+} from "./config/model-factory.js";
 
-const ORCHESTRATOR_MODEL = "gemini-2.5-flash";
+export interface OrchestratorOptions {
+  /**
+   * Model identifier in the "<provider>:<model>[@<baseUrl>]" format
+   * (see config/model-factory.ts). Defaults to $ASST_ORCHESTRATOR_MODEL or
+   * google:gemini-2.5-flash.
+   */
+  model?: string;
+}
 
 const ORCHESTRATOR_SYSTEM_PROMPT_TEMPLATE = (repoRoot: string) => `You are ARES Orchestrator — Automated Resilience Evaluation System for Solana security intelligence.
 
@@ -42,29 +52,35 @@ ${SUB_AGENT_CONFIGS.map(c => `- **${c.name}**: ${c.description}`).join("\n")}
 - "hi, what can you do?" → invoke report_synthesizer with task to introduce capabilities`;
 
 export class Orchestrator {
-  private llm: ChatGoogleGenerativeAI;
+  private llm: any;
   private subAgents: Map<string, SubAgent>;
   private persistence: ASSTPersistenceSQLite;
   private repoRoot: string;
+  private initPromise?: Promise<void>;
+  public readonly model: string;
 
-  constructor(repoRoot: string) {
+  constructor(repoRoot: string, opts: OrchestratorOptions = {}) {
     this.repoRoot = repoRoot;
     this.persistence = new ASSTPersistenceSQLite(repoRoot);
+    this.model = opts.model ?? DEFAULT_ORCHESTRATOR_MODEL;
 
-    const apiKey = process.env.GOOGLE_API_KEY;
-    if (!apiKey) throw new Error("Missing GOOGLE_API_KEY for orchestrator");
-
-    this.llm = new ChatGoogleGenerativeAI({
-      model: ORCHESTRATOR_MODEL,
-      apiKey,
-      temperature: 0.1,
-    });
+    // createModel throws a descriptive error if the required key is missing.
+    this.llm = createModel(this.model, { temperature: 0.1 });
 
     this.subAgents = createAllSubAgents(repoRoot);
   }
 
-  async init() {
-    await this.persistence.init();
+  /**
+   * Initialize persistence. Safe to call multiple times (idempotent) —
+   * subsequent calls reuse the in-flight or resolved promise so `chat()`
+   * and `runFullScan()` can call it lazily without racing the CLI's
+   * explicit `await orchestrator.init()`.
+   */
+  async init(): Promise<void> {
+    if (!this.initPromise) {
+      this.initPromise = this.persistence.init();
+    }
+    return this.initPromise;
   }
 
   /**
@@ -74,7 +90,7 @@ export class Orchestrator {
     input: string,
     onStatus?: (msg: string) => void
   ): Promise<string> {
-    // Save user message
+    await this.init();
     await this.persistence.addHistory("user", input);
 
     // Step 1: Ask orchestrator to route
@@ -199,6 +215,7 @@ export class Orchestrator {
   async runFullScan(
     onStatus?: (agent: string, status: string) => void
   ): Promise<{ agent: string; output: string }[]> {
+    await this.init();
     const scanOrder = [
       "secret_hygiene_scanner",
       "solana_vulnerability_analyst",

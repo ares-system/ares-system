@@ -1,8 +1,7 @@
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { HumanMessage, AIMessage, SystemMessage } from "@langchain/core/messages";
 import { createAllSubAgents, SUB_AGENT_CONFIGS } from "./sub-agents.js";
-import { ASSTPersistence } from "./persistence.js";
-const ORCHESTRATOR_MODEL = "gemini-2.5-flash";
+import { ASSTPersistenceSQLite } from "./persistence/sqlite.js";
+import { createModel, DEFAULT_ORCHESTRATOR_MODEL, } from "./config/model-factory.js";
 const ORCHESTRATOR_SYSTEM_PROMPT_TEMPLATE = (repoRoot) => `You are ARES Orchestrator — Automated Resilience Evaluation System for Solana security intelligence.
 
 ## CRITICAL — Current Repository Path:
@@ -43,27 +42,33 @@ export class Orchestrator {
     subAgents;
     persistence;
     repoRoot;
-    constructor(repoRoot) {
+    initPromise;
+    model;
+    constructor(repoRoot, opts = {}) {
         this.repoRoot = repoRoot;
-        this.persistence = new ASSTPersistence(repoRoot);
-        const apiKey = process.env.GOOGLE_API_KEY;
-        if (!apiKey)
-            throw new Error("Missing GOOGLE_API_KEY for orchestrator");
-        this.llm = new ChatGoogleGenerativeAI({
-            model: ORCHESTRATOR_MODEL,
-            apiKey,
-            temperature: 0.1,
-        });
+        this.persistence = new ASSTPersistenceSQLite(repoRoot);
+        this.model = opts.model ?? DEFAULT_ORCHESTRATOR_MODEL;
+        // createModel throws a descriptive error if the required key is missing.
+        this.llm = createModel(this.model, { temperature: 0.1 });
         this.subAgents = createAllSubAgents(repoRoot);
     }
+    /**
+     * Initialize persistence. Safe to call multiple times (idempotent) —
+     * subsequent calls reuse the in-flight or resolved promise so `chat()`
+     * and `runFullScan()` can call it lazily without racing the CLI's
+     * explicit `await orchestrator.init()`.
+     */
     async init() {
-        await this.persistence.init();
+        if (!this.initPromise) {
+            this.initPromise = this.persistence.init();
+        }
+        return this.initPromise;
     }
     /**
      * Process a user message through the orchestrator → sub-agents pipeline.
      */
     async chat(input, onStatus) {
-        // Save user message
+        await this.init();
         await this.persistence.addHistory("user", input);
         // Step 1: Ask orchestrator to route
         onStatus?.("Orchestrator is reasoning...");
@@ -167,6 +172,7 @@ export class Orchestrator {
      * Deterministic scan — runs ALL sub-agents in order (no LLM routing needed).
      */
     async runFullScan(onStatus) {
+        await this.init();
         const scanOrder = [
             "secret_hygiene_scanner",
             "solana_vulnerability_analyst",

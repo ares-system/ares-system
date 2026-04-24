@@ -26,4 +26,56 @@ describe("parseAssuranceRunManifestV1", () => {
     });
     expect(m.chain_intelligence?.status).toBe("skipped");
   });
+
+  it("accepts chain_intelligence with trigger summary fields", () => {
+    const m = parseAssuranceRunManifestV1({
+      ...minimalBase,
+      chain_intelligence: {
+        status: "ok",
+        ingestion_method: "webhook",
+        evidence_bundle_sha256: "a".repeat(64),
+        evidence_schema_version: "asst_chain_evidence_v2",
+        transaction_count: 42,
+        trigger_counts: {
+          total: 3,
+          by_kind: { program_upgrade: 1, large_native_transfer: 2 },
+          by_severity: { high: 1, medium: 2 },
+        },
+        trigger_max_severity: "high",
+        trigger_kinds: ["large_native_transfer", "program_upgrade"],
+      },
+    });
+    expect(m.chain_intelligence?.trigger_counts?.total).toBe(3);
+    expect(m.chain_intelligence?.trigger_max_severity).toBe("high");
+    expect(m.chain_intelligence?.trigger_kinds).toEqual([
+      "large_native_transfer",
+      "program_upgrade",
+    ]);
+  });
+
+  it("accepts chain_intelligence with null trigger_max_severity (no triggers)", () => {
+    const m = parseAssuranceRunManifestV1({
+      ...minimalBase,
+      chain_intelligence: {
+        status: "ok",
+        evidence_bundle_sha256: "b".repeat(64),
+        trigger_max_severity: null,
+        trigger_counts: { total: 0 },
+      },
+    });
+    expect(m.chain_intelligence?.trigger_max_severity).toBeNull();
+  });
+
+  it("rejects unknown trigger_kind values", () => {
+    expect(() =>
+      parseAssuranceRunManifestV1({
+        ...minimalBase,
+        chain_intelligence: {
+          status: "ok",
+          evidence_bundle_sha256: "c".repeat(64),
+          trigger_kinds: ["unknown_kind_xyz"],
+        },
+      }),
+    ).toThrow();
+  });
 });

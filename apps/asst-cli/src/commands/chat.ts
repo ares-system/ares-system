@@ -59,7 +59,7 @@ function prompt(promptText: string): Promise<string | null> {
 
 // ─── Chat Command ────────────────────────────────────────────
 
-export async function chatCommand(options: { model: string; repo?: string }) {
+export async function chatCommand(options: { model?: string; repo?: string }) {
   const repoRoot = options.repo ? path.resolve(options.repo) : process.cwd();
   const c = theme.c;
 
@@ -73,7 +73,7 @@ export async function chatCommand(options: { model: string; repo?: string }) {
     subtitle: "Multi-Agent Security Intelligence Shell",
     version: "2.0.0",
     repo: repoRoot,
-    model: options.model || "gemini-2.5-flash",
+    model: options.model || process.env.ASST_ORCHESTRATOR_MODEL || "google:gemini-2.5-flash",
     items: [
       { label: "Agents", value: "6 specialized sub-agents" },
       { label: "Mode", value: "Interactive Chat" },
@@ -85,7 +85,7 @@ export async function chatCommand(options: { model: string; repo?: string }) {
   const spin = new CleanSpinner();
   spin.start(chalk.hex(c.textDim)("Initializing orchestrator..."));
 
-  const orchestrator = new Orchestrator(repoRoot);
+  const orchestrator = new Orchestrator(repoRoot, { model: options.model });
   await orchestrator.init();
 
   spin.stop(chalk.hex(c.green)("✓") + chalk.hex(c.text)(" Orchestrator ready"));

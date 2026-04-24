@@ -112,11 +112,77 @@ if (chainEvidence) {
   const evidence_bundle_sha256 = createHash("sha256")
     .update(body)
     .digest("hex");
+
   chainIntelligenceSlice = {
     status: "ok",
     ingestion_method: "webhook",
     evidence_bundle_sha256,
   };
+
+  // Optional: enrich with trigger summary when the bundle is v2+.
+  try {
+    const parsedBundle = JSON.parse(body) as {
+      schema_version?: string;
+      transaction_count?: number;
+      trigger_counts?: {
+        total?: number;
+        by_kind?: Record<string, number>;
+        by_severity?: Record<string, number>;
+      };
+      trigger_max_severity?: string | null;
+      triggers?: Array<{ kind?: string }>;
+    };
+    if (typeof parsedBundle.schema_version === "string") {
+      chainIntelligenceSlice.evidence_schema_version =
+        parsedBundle.schema_version;
+    }
+    if (typeof parsedBundle.transaction_count === "number") {
+      chainIntelligenceSlice.transaction_count =
+        parsedBundle.transaction_count;
+    }
+    if (
+      parsedBundle.trigger_counts &&
+      typeof parsedBundle.trigger_counts.total === "number"
+    ) {
+      chainIntelligenceSlice.trigger_counts = {
+        total: parsedBundle.trigger_counts.total,
+        by_kind: parsedBundle.trigger_counts.by_kind,
+        by_severity: parsedBundle.trigger_counts.by_severity,
+      };
+    }
+    const SEVERITIES = ["critical", "high", "medium", "low", "info"] as const;
+    type Sev = (typeof SEVERITIES)[number];
+    const sev = parsedBundle.trigger_max_severity;
+    if (sev === null) {
+      chainIntelligenceSlice.trigger_max_severity = null;
+    } else if (typeof sev === "string" && (SEVERITIES as readonly string[]).includes(sev)) {
+      chainIntelligenceSlice.trigger_max_severity = sev as Sev;
+    }
+
+    if (Array.isArray(parsedBundle.triggers)) {
+      const ALLOWED_KINDS = [
+        "program_upgrade",
+        "upgrade_authority_change",
+        "mint_authority_change",
+        "freeze_authority_change",
+        "large_native_transfer",
+        "large_token_transfer",
+      ] as const;
+      type Kind = (typeof ALLOWED_KINDS)[number];
+      const allowed = new Set<string>(ALLOWED_KINDS);
+      const kinds = new Set<Kind>();
+      for (const t of parsedBundle.triggers) {
+        if (typeof t?.kind === "string" && allowed.has(t.kind)) {
+          kinds.add(t.kind as Kind);
+        }
+      }
+      if (kinds.size > 0) {
+        chainIntelligenceSlice.trigger_kinds = Array.from(kinds).sort();
+      }
+    }
+  } catch {
+    // Legacy v1 bundle or malformed JSON — keep the slice as-is (just the sha).
+  }
 }
 
 if (supplyChain) {

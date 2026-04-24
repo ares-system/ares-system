@@ -16,6 +16,19 @@ import { diffCommand } from "./commands/diff.js";
 import { watchCommand } from "./commands/watch.js";
 import fs from "node:fs";
 import chalk from "chalk";
+// ─── HITL Permission Hook ─────────────────────────────────────
+// Installs a CLI prompt so agent tools that want to write files or run
+// commands cannot do so without explicit user approval.
+globalThis.ARES_ASK_PERMISSION = async (msg) => {
+    const { confirm, isCancel } = await import("@clack/prompts");
+    const ok = await confirm({
+        message: chalk.hex(theme.c.yellow)("Agent permission request:\n") + msg,
+        initialValue: false,
+    });
+    if (isCancel(ok))
+        return false;
+    return Boolean(ok);
+};
 // -- Config Management --
 const CONFIG_PATH = path.join(process.cwd(), ".asst", "config.json");
 function loadConfig() {
@@ -35,31 +48,49 @@ function saveConfig(config) {
         fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
 }
+/**
+ * Figure out which provider the user intends to use and make sure the
+ * matching API key exists. Uses the model resolution order:
+ *   CLI flag > .asst/config.json > $ASST_ORCHESTRATOR_MODEL > engine default
+ * If the user chose a local provider (ollama/local), no key prompt is needed.
+ */
 async function ensureConfig() {
     const c = theme.c;
-    if (!process.env.GOOGLE_API_KEY) {
-        console.log("");
-        console.log(renderPanel(chalk.hex(c.yellow)("No GOOGLE_API_KEY found.\n\n") +
-            chalk.hex(c.text)("ASST requires a Google AI Studio key for the orchestrator.\n") +
-            chalk.hex(c.cyan)("Get one at: https://aistudio.google.com/apikey"), { title: "Configuration Required", borderColor: c.yellow, padding: 1 }));
-        console.log("");
-        const apiKey = await text({
-            message: chalk.hex(c.cyan)("❯") + " Enter your Google API Key:",
-            placeholder: "AIzaSy...",
-            validate: (value) => {
-                if (!value)
-                    return "API Key is required.";
-            }
-        });
-        if (isCancel(apiKey) || !apiKey) {
-            console.log(chalk.hex(c.red)("\n  Configuration cancelled.\n"));
-            process.exit(1);
+    const modelId = loadConfig().model ??
+        process.env.ASST_ORCHESTRATOR_MODEL ??
+        "google:gemini-2.5-flash";
+    const provider = modelId.includes(":") ? modelId.split(":")[0] : "google";
+    const need = provider === "google"
+        ? { env: "GOOGLE_API_KEY", label: "Google AI Studio", url: "https://aistudio.google.com/apikey" }
+        : provider === "openrouter"
+            ? { env: "OPENROUTER_API_KEY", label: "OpenRouter", url: "https://openrouter.ai/keys" }
+            : provider === "openai"
+                ? { env: "OPENAI_API_KEY", label: "OpenAI" }
+                : null; // ollama / local need no key
+    if (!need)
+        return;
+    if (process.env[need.env])
+        return;
+    console.log("");
+    console.log(renderPanel(chalk.hex(c.yellow)(`No ${need.env} found.\n\n`) +
+        chalk.hex(c.text)(`ASST needs a ${need.label} key for the current orchestrator model (${modelId}).\n`) +
+        (need.url ? chalk.hex(c.cyan)(`Get one at: ${need.url}`) : ""), { title: "Configuration Required", borderColor: c.yellow, padding: 1 }));
+    console.log("");
+    const apiKey = await text({
+        message: chalk.hex(c.cyan)("❯") + ` Enter your ${need.label} key:`,
+        validate: (value) => {
+            if (!value)
+                return "API Key is required.";
         }
-        const envPath = path.join(process.cwd(), ".env.local");
-        fs.appendFileSync(envPath, `\nGOOGLE_API_KEY=${apiKey}\n`);
-        process.env.GOOGLE_API_KEY = apiKey;
-        console.log(chalk.hex(c.green)(`  ✓ Key saved to ${envPath}\n`));
+    });
+    if (isCancel(apiKey) || !apiKey) {
+        console.log(chalk.hex(c.red)("\n  Configuration cancelled.\n"));
+        process.exit(1);
     }
+    const envPath = path.join(process.cwd(), ".env.local");
+    fs.appendFileSync(envPath, `\n${need.env}=${apiKey}\n`);
+    process.env[need.env] = apiKey;
+    console.log(chalk.hex(c.green)(`  ✓ Key saved to ${envPath}\n`));
 }
 const program = new Command();
 const config = loadConfig();
@@ -78,11 +109,16 @@ program
     .command("scan")
     .description("Run a deterministic 6-agent security scan")
     .option("-r, --repo <path>", "Path to project root (default: current directory)")
+    .option("-m, --model <model>", "Override orchestrator model (e.g. ollama:llama3.1)")
     .option("--json", "Output raw JSON for CI/CD pipelines")
     .action(async (options) => {
     try {
         await ensureConfig();
-        await scanCommand({ repo: options.repo, json: options.json });
+        await scanCommand({
+            repo: options.repo,
+            json: options.json,
+            model: options.model || config.model,
+        });
     }
     catch (error) {
         console.log(renderPanel(chalk.hex(theme.c.red)(error.message), { title: "Scan Error", borderColor: theme.c.red, padding: 1 }));
@@ -97,7 +133,9 @@ program
     .action(async (options) => {
     try {
         await ensureConfig();
-        const model = options.model || config.model || "gemini-2.5-flash";
+        // Resolve model: CLI flag > .asst/config.json > $ASST_ORCHESTRATOR_MODEL
+        // > engine default. Passing undefined lets the engine apply its own default.
+        const model = options.model || config.model;
         const repo = options.repo || process.env.ARES_REPO_ROOT || undefined;
         await chatCommand({ model, repo });
     }
@@ -190,11 +228,11 @@ async function main() {
             switch (chosen) {
                 case "chat":
                     await ensureConfig();
-                    await chatCommand({ model: config.model || "gemini-2.5-flash", repo: process.env.ARES_REPO_ROOT });
+                    await chatCommand({ model: config.model, repo: process.env.ARES_REPO_ROOT });
                     break;
                 case "scan":
                     await ensureConfig();
-                    await scanCommand({ repo: process.env.ARES_REPO_ROOT });
+                    await scanCommand({ repo: process.env.ARES_REPO_ROOT, model: config.model });
                     break;
                 case "watch":
                     await watchCommand({});

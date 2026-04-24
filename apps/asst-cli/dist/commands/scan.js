@@ -11,7 +11,7 @@ export async function scanCommand(options) {
     const c = theme.c;
     // JSON mode — skip all TUI
     if (options.json) {
-        return runJsonScan(repoRoot);
+        return runJsonScan(repoRoot, options.model);
     }
     // ─── Startup Banner ────────────────────────────────────────
     console.clear();
@@ -61,7 +61,7 @@ export async function scanCommand(options) {
         padding: 0,
     }));
     // ─── Execute Scan ──────────────────────────────────────────
-    const orchestrator = new Orchestrator(repoRoot);
+    const orchestrator = new Orchestrator(repoRoot, { model: options.model });
     await orchestrator.init();
     const s = spinner();
     const startTime = Date.now();
@@ -143,8 +143,8 @@ export async function scanCommand(options) {
     console.log("");
 }
 // ─── JSON Mode (CI/CD) ────────────────────────────────────────
-async function runJsonScan(repoRoot) {
-    const orchestrator = new Orchestrator(repoRoot);
+async function runJsonScan(repoRoot, model) {
+    const orchestrator = new Orchestrator(repoRoot, { model });
     await orchestrator.init();
     const startTime = Date.now();
     const results = await orchestrator.runFullScan(() => { });

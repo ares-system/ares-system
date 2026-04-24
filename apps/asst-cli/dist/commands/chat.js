@@ -61,7 +61,7 @@ export async function chatCommand(options) {
         subtitle: "Multi-Agent Security Intelligence Shell",
         version: "2.0.0",
         repo: repoRoot,
-        model: options.model || "gemini-2.5-flash",
+        model: options.model || process.env.ASST_ORCHESTRATOR_MODEL || "google:gemini-2.5-flash",
         items: [
             { label: "Agents", value: "6 specialized sub-agents" },
             { label: "Mode", value: "Interactive Chat" },
@@ -71,7 +71,7 @@ export async function chatCommand(options) {
     // ─── Init ────────────────────────────────────────────────
     const spin = new CleanSpinner();
     spin.start(chalk.hex(c.textDim)("Initializing orchestrator..."));
-    const orchestrator = new Orchestrator(repoRoot);
+    const orchestrator = new Orchestrator(repoRoot, { model: options.model });
     await orchestrator.init();
     spin.stop(chalk.hex(c.green)("✓") + chalk.hex(c.text)(" Orchestrator ready"));
     console.log(chalk.hex(c.textDim)("  Type your query below. Type 'exit' to quit."));

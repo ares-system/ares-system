@@ -45,6 +45,20 @@ Options:
 
 The manifest can optionally include **`chain_intelligence`**: a hash of merged, parsed on-chain evidence produced by your ingestion pipeline (see repo [`.superstack/build-context.md`](../../../.superstack/build-context.md) **Pipeline** section). Typical flow: webhook receiver → normalize/dedupe by `(signature, slot)` → store/query → export merged JSON → `--chain-evidence` when writing the Assurance Run manifest.
 
+When the evidence bundle is **`asst_chain_evidence_v2`** (produced by [`apps/chain-intake`](../../../apps/chain-intake/README.md) ≥ 0.1.1), the manifest writer additionally extracts the derived anomaly summary into `chain_intelligence`:
+
+| Field                       | Meaning                                                                                  |
+| --------------------------- | ---------------------------------------------------------------------------------------- |
+| `evidence_schema_version`   | Passed through from the bundle (e.g. `asst_chain_evidence_v2`).                          |
+| `transaction_count`         | Number of txs covered (informational).                                                    |
+| `trigger_counts`            | `{ total, by_kind, by_severity }` — deterministic counts over detected triggers.          |
+| `trigger_max_severity`      | Highest severity across all triggers (`critical` / `high` / `medium` / `low` / `info`), or `null` when none. |
+| `trigger_kinds`             | Sorted unique list of rule ids that fired (e.g. `program_upgrade`, `large_native_transfer`). |
+
+CI gates can now fail the job when `trigger_max_severity` exceeds a policy threshold, without re-parsing the evidence file.
+
+Legacy `asst_chain_evidence_v1` bundles are still accepted; the writer just records `evidence_bundle_sha256` without trigger fields.
+
 Output files:
 
 - `assurance/run-<timestamp>.json` — manifest (UTC timestamp in the filename).

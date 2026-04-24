@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Orchestrator } from "@ares/engine";
+import { createPublicOrchestrator } from "@/lib/engine-factory";
 import { join } from "node:path";
 
 export async function GET(req: NextRequest) {
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   (async () => {
     try {
       const repoRoot = join(process.cwd(), "../..");
-      const orchestrator = new Orchestrator(repoRoot);
+      const orchestrator = createPublicOrchestrator({ repoRoot });
       await orchestrator.init();
 
       // For this production demo, we simulate a stream of current system activity

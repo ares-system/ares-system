@@ -1,112 +1,166 @@
+/**
+ * Sub-agent registry.
+ *
+ * Each entry declares: primary model, fallback models, associated skills, tools,
+ * and a system-prompt prefix. Models are resolved via the model factory, so any
+ * entry can be pointed at a local Ollama instance, an OpenRouter model, or a
+ * hosted Google/OpenAI model by changing the identifier only.
+ *
+ * Model IDs follow the "<provider>:<model>" format (see config/model-factory.ts).
+ * Legacy short-form IDs ("gemini-2.5-flash") still work via parseModelId.
+ */
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
-import { ChatOpenRouter } from "@langchain/openrouter";
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-import { loadSkills } from "./skill-loader.js";
-import { solanaRpcReadTool, gitDiffSummaryTool, writeAssuranceManifestTool, programAccountAnalyzerTool, programUpgradeMonitorTool, cpiGraphMapperTool, accountStateSnapshotTool, secretScannerTool, envHygieneCheckTool, unifiedPostureReportTool, generatePdfReportTool, anchorSourceScannerTool, tokenConcentrationTool } from "./assurance-tools/index.js";
-import { readFileTool } from "./tools.js";
-// ─── Model Factory ───────────────────────────────────────────────
-function createGoogleModel(modelId) {
-    const apiKey = process.env.GOOGLE_API_KEY;
-    if (!apiKey)
-        throw new Error("Missing GOOGLE_API_KEY");
-    return new ChatGoogleGenerativeAI({ model: modelId, apiKey, temperature: 0.1 });
-}
-function createOpenRouterModel(modelId) {
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    if (!apiKey)
-        throw new Error("Missing OPENROUTER_API_KEY");
-    return new ChatOpenRouter({ model: modelId, apiKey, temperature: 0.1 });
-}
-function createModel(modelId) {
-    if (modelId.startsWith("gemini"))
-        return createGoogleModel(modelId);
-    return createOpenRouterModel(modelId);
-}
+import { HumanMessage } from "@langchain/core/messages";
+import { createModel } from "./config/model-factory.js";
+import { loadSkills } from "./skills/loader.js";
+import { buildSkillCatalog, loadSkillsForTask, } from "./skills/retrieval.js";
+import { readFileTool } from "./tools/readonly.js";
+import { createMutatingTools } from "./tools/mutating.js";
+import { parseToolResult } from "./findings/index.js";
+import { solanaRpcReadTool, gitDiffSummaryTool, writeAssuranceManifestTool, programAccountAnalyzerTool, programUpgradeMonitorTool, cpiGraphMapperTool, accountStateSnapshotTool, secretScannerTool, envHygieneCheckTool, unifiedPostureReportTool, generatePdfReportTool, anchorSourceScannerTool, tokenConcentrationTool, } from "./assurance-tools/index.js";
 export const SUB_AGENT_CONFIGS = [
     {
         name: "solana_vulnerability_analyst",
         description: "Analyzes Solana program code for vulnerabilities: Anchor constraints, PDA seeds, signer checks, CPI boundaries, oracle dependencies.",
-        primaryModel: "gemini-2.0-flash",
-        fallbackModels: ["gemini-2.5-flash"],
+        primaryModel: "google:gemini-2.0-flash",
+        fallbackModels: ["google:gemini-2.5-flash"],
         skills: [
             "solana-defi-vulnerability-analyst-agent",
             "sealevel-attacks-solana",
-            "neodyme-solana-security-workshop"
+            "neodyme-solana-security-workshop",
         ],
-        tools: [programAccountAnalyzerTool, anchorSourceScannerTool, readFileTool, solanaRpcReadTool],
-        systemPromptPrefix: "You are the Solana Vulnerability Analyst sub-agent. Your job is to analyze Solana programs for security vulnerabilities using your specialized tools and deep knowledge of Sealevel attack patterns."
+        tools: [
+            programAccountAnalyzerTool,
+            anchorSourceScannerTool,
+            readFileTool,
+            solanaRpcReadTool,
+        ],
+        systemPromptPrefix: "You are the Solana Vulnerability Analyst sub-agent. Your job is to analyze Solana programs for security vulnerabilities using your specialized tools and deep knowledge of Sealevel attack patterns.",
     },
     {
         name: "defi_security_auditor",
         description: "Audits DeFi protocols for admin takeover vectors, upgrade authority risks, flash loan patterns, governance centralization.",
-        primaryModel: "gemini-2.0-flash",
-        fallbackModels: ["gemini-2.5-flash"],
+        primaryModel: "google:gemini-2.0-flash",
+        fallbackModels: ["google:gemini-2.5-flash"],
         skills: [
             "defi-security-audit-agent",
             "defi-admin-takeover-mitigation-lessons",
-            "flash-loan-exploit-investigator-agent"
+            "flash-loan-exploit-investigator-agent",
         ],
-        tools: [cpiGraphMapperTool, programUpgradeMonitorTool, accountStateSnapshotTool, readFileTool],
-        systemPromptPrefix: "You are the DeFi Security Auditor sub-agent. Your job is to audit DeFi protocols for centralization risks, admin takeover vectors, and flash loan vulnerabilities."
+        tools: [
+            cpiGraphMapperTool,
+            programUpgradeMonitorTool,
+            accountStateSnapshotTool,
+            readFileTool,
+        ],
+        systemPromptPrefix: "You are the DeFi Security Auditor sub-agent. Your job is to audit DeFi protocols for centralization risks, admin takeover vectors, and flash loan vulnerabilities.",
     },
     {
         name: "rug_pull_detector",
         description: "Detects rug pull patterns: liquidity lock verification, LP distribution, transfer restrictions, dev wallet clustering.",
-        primaryModel: "nvidia/nemotron-nano-9b-v2:free",
-        fallbackModels: ["openai/gpt-oss-20b:free", "gemini-2.0-flash"],
-        skills: [
-            "rug-pull-pattern-detection-agent",
-            "honeypot-detection-techniques"
+        primaryModel: "openrouter:nvidia/nemotron-nano-9b-v2:free",
+        fallbackModels: [
+            "openrouter:openai/gpt-oss-20b:free",
+            "google:gemini-2.0-flash",
         ],
+        skills: ["rug-pull-pattern-detection-agent", "honeypot-detection-techniques"],
         tools: [solanaRpcReadTool, accountStateSnapshotTool, tokenConcentrationTool],
-        systemPromptPrefix: "You are the Rug Pull Detector sub-agent. Your job is to analyze tokens and protocols for rug pull patterns, honeypot mechanics, and liquidity risks."
+        systemPromptPrefix: "You are the Rug Pull Detector sub-agent. Your job is to analyze tokens and protocols for rug pull patterns, honeypot mechanics, and liquidity risks.",
     },
     {
         name: "secret_hygiene_scanner",
         description: "Scans repositories for hardcoded secrets, environment hygiene issues, and git history leaks.",
-        primaryModel: "nvidia/nemotron-nano-9b-v2:free",
-        fallbackModels: ["openai/gpt-oss-20b:free", "gemini-2.0-flash"],
-        skills: [
-            "on-chain-investigator-agent",
-            "osec-solana-auditor-introduction"
+        primaryModel: "openrouter:nvidia/nemotron-nano-9b-v2:free",
+        fallbackModels: [
+            "openrouter:openai/gpt-oss-20b:free",
+            "google:gemini-2.0-flash",
         ],
+        skills: ["on-chain-investigator-agent", "osec-solana-auditor-introduction"],
         tools: [secretScannerTool, envHygieneCheckTool, gitDiffSummaryTool],
-        systemPromptPrefix: "You are the Secret & Hygiene Scanner sub-agent. Your job is to find hardcoded secrets, environment misconfigurations, and git history leaks in repositories."
+        systemPromptPrefix: "You are the Secret & Hygiene Scanner sub-agent. Your job is to find hardcoded secrets, environment misconfigurations, and git history leaks in repositories.",
     },
     {
         name: "supply_chain_analyst",
         description: "Analyzes dependency supply chain: npm audit, static analysis, SARIF output, vulnerability manifests.",
-        primaryModel: "openai/gpt-oss-20b:free",
-        fallbackModels: ["nvidia/nemotron-nano-9b-v2:free", "gemini-2.0-flash"],
+        primaryModel: "openrouter:openai/gpt-oss-20b:free",
+        fallbackModels: [
+            "openrouter:nvidia/nemotron-nano-9b-v2:free",
+            "google:gemini-2.0-flash",
+        ],
         skills: [
             "blockchain-intelligence-fundamentals",
-            "blockchain-analytics-operations"
+            "blockchain-analytics-operations",
         ],
         tools: [writeAssuranceManifestTool],
-        systemPromptPrefix: "You are the Supply Chain Analyst sub-agent. Your job is to analyze dependency vulnerabilities, run static analysis, and produce structured security manifests."
+        systemPromptPrefix: "You are the Supply Chain Analyst sub-agent. Your job is to analyze dependency vulnerabilities, run static analysis, and produce structured security manifests.",
     },
     {
         name: "report_synthesizer",
         description: "Synthesizes findings from all sub-agents into a professional security report with severity ratings and remediation advice.",
-        primaryModel: "gemini-2.5-flash",
-        fallbackModels: ["gemini-2.0-flash"],
+        primaryModel: "google:gemini-2.5-flash",
+        fallbackModels: ["google:gemini-2.0-flash"],
         skills: [
             "blockchain-intelligence-playbook",
-            "cmichel-smart-contract-auditor-guide"
+            "cmichel-smart-contract-auditor-guide",
         ],
         tools: [unifiedPostureReportTool, generatePdfReportTool],
-        systemPromptPrefix: "You are the Report Synthesizer sub-agent. Your primary job is to take raw findings from other security scanners and produce a professional security assessment report. IMPORTANT: ONLY generate a PDF report if you are explicitly given structured scan results or findings to process. For general conversation or queries without scan findings, do NOT use the generatePdfReportTool; simply answer the user dynamically in chat."
-    }
+        systemPromptPrefix: "You are the Report Synthesizer sub-agent. Your primary job is to take raw findings from other security scanners and produce a professional security assessment report. ONLY generate a PDF report if you are explicitly given structured scan results or findings to process. For general conversation or queries without scan findings, do NOT use the generatePdfReportTool; simply answer the user dynamically in chat.",
+    },
 ];
 // ─── Sub-Agent Runtime ───────────────────────────────────────────
 export class SubAgent {
     config;
     agent;
     repoRoot;
+    /** Lazy, shared across invokes. Rebuilt automatically when SKILL.md files change. */
+    _catalog;
+    _catalogLoaded = false;
     constructor(config, repoRoot) {
         this.config = config;
         this.repoRoot = repoRoot;
         this.initAgent(config.primaryModel);
+    }
+    getCatalog() {
+        if (!this._catalogLoaded) {
+            this._catalog = buildSkillCatalog(this.repoRoot);
+            this._catalogLoaded = true;
+        }
+        return this._catalog;
+    }
+    resolveRetrievalTopK() {
+        if (typeof this.config.retrievalTopK === "number") {
+            return this.config.retrievalTopK;
+        }
+        const envVal = Number.parseInt(process.env.ASST_SKILL_RETRIEVAL_TOPK ?? "", 10);
+        return Number.isFinite(envVal) ? Math.max(0, envVal) : 0;
+    }
+    /**
+     * Build the retrieval-augmented user input for a given task. Pinned skills
+     * are already in the system prompt, so we exclude them from retrieval.
+     * Returns `input` unchanged if retrieval is disabled or no skills match.
+     */
+    augmentWithRetrievedSkills(input) {
+        const topK = this.resolveRetrievalTopK();
+        if (topK <= 0)
+            return input;
+        const catalog = this.getCatalog();
+        if (!catalog)
+            return input;
+        const { text, used } = loadSkillsForTask(this.repoRoot, input, {
+            catalog,
+            topK,
+            exclude: this.config.skills,
+            maxChars: 12_000, // ~3k tokens, keeps per-call overhead bounded
+        });
+        if (!text || used.length === 0)
+            return input;
+        const names = used.map((s) => s.name).join(", ");
+        return [
+            `## Additional retrieved domain context (for this task only):`,
+            text,
+            `## Task (skills retrieved: ${names}):`,
+            input,
+        ].join("\n");
     }
     initAgent(modelId) {
         const llm = createModel(modelId);
@@ -118,23 +172,47 @@ export class SubAgent {
             skillContent || "(No skills loaded)",
             "=== END DOMAIN KNOWLEDGE ===",
             "",
-            "Use your tools to gather evidence. Always cite specific findings with file paths, line numbers, or account addresses. Classify severity as Critical / High / Medium / Low / Informational."
+            "Use your tools to gather evidence. Always cite specific findings with file paths, line numbers, or account addresses. Classify severity as Critical / High / Medium / Low / Informational.",
         ].join("\n");
         this.agent = createReactAgent({
             llm,
             tools: this.config.tools,
-            messageModifier: systemPrompt
+            messageModifier: systemPrompt,
         });
     }
     async invoke(input) {
-        const { HumanMessage } = await import("@langchain/core/messages");
+        const detailed = await this.invokeWithArtifacts(input);
+        return detailed.output;
+    }
+    /**
+     * Invoke the sub-agent and also collect any `ToolResult` envelopes that
+     * its tools returned. This is the preferred entry point for hosts that
+     * want structured findings (dashboards, CI gates, SARIF export).
+     *
+     * Tools whose output isn't a valid ToolResult are silently skipped —
+     * `artifacts` only contains envelopes that successfully parsed.
+     */
+    async invokeWithArtifacts(input) {
+        const augmentedInput = this.augmentWithRetrievedSkills(input);
         for (let attempt = 0; attempt <= this.config.fallbackModels.length; attempt++) {
             try {
                 const result = await this.agent.invoke({
-                    messages: [new HumanMessage(input)]
+                    messages: [new HumanMessage(augmentedInput)],
                 });
+                const artifacts = [];
+                for (const msg of result.messages ?? []) {
+                    // LangChain tool messages arrive with `_getType?.() === "tool"`
+                    // or a `tool_call_id` property. Use both hints for robustness.
+                    const isToolMsg = (typeof msg._getType === "function" && msg._getType() === "tool") ||
+                        !!msg.tool_call_id;
+                    if (!isToolMsg)
+                        continue;
+                    const parsed = parseToolResult(this.formatContent(msg.content));
+                    if (parsed)
+                        artifacts.push(parsed);
+                }
                 const lastMsg = result.messages[result.messages.length - 1];
-                return this.formatContent(lastMsg.content);
+                return { output: this.formatContent(lastMsg.content), artifacts };
             }
             catch (error) {
                 const isRetryable = error?.message?.includes("429") ||
@@ -165,7 +243,11 @@ export class SubAgent {
     }
 }
 /**
- * Create all sub-agents for a given repo.
+ * Build all sub-agents for a given repo.
+ *
+ * Mutating tools (write_file, run_terminal_cmd) are NOT attached by default.
+ * Surfaces that want them should extend the config list or call
+ * `createMutatingTools()` and merge the returned tools into each sub-agent.
  */
 export function createAllSubAgents(repoRoot) {
     const agents = new Map();
@@ -174,3 +256,5 @@ export function createAllSubAgents(repoRoot) {
     }
     return agents;
 }
+// Re-export so hosts can build their own mutating tool bundles.
+export { createMutatingTools };

@@ -56,6 +56,30 @@ const staticAnalysisSchema = z.object({
     .optional(),
 });
 
+/** Chain-intake trigger kinds — mirrors apps/chain-intake/src/triggers.ts. */
+const chainTriggerKindSchema = z.enum([
+  "program_upgrade",
+  "upgrade_authority_change",
+  "mint_authority_change",
+  "freeze_authority_change",
+  "large_native_transfer",
+  "large_token_transfer",
+]);
+
+const chainTriggerSeveritySchema = z.enum([
+  "critical",
+  "high",
+  "medium",
+  "low",
+  "info",
+]);
+
+const chainTriggerCountsSchema = z.object({
+  total: z.number().int().nonnegative(),
+  by_kind: z.record(z.string(), z.number().int().nonnegative()).optional(),
+  by_severity: z.record(z.string(), z.number().int().nonnegative()).optional(),
+});
+
 /** Optional — merged parsed on-chain evidence (pipeline output), not raw RPC blobs */
 const chainIntelligenceSchema = z
   .object({
@@ -64,6 +88,16 @@ const chainIntelligenceSchema = z
       .enum(["webhook", "websocket", "geyser", "rpc-polling"])
       .optional(),
     evidence_bundle_sha256: z.string().min(1).optional(),
+    /** Evidence bundle schema_version as emitted by chain-intake. */
+    evidence_schema_version: z.string().optional(),
+    /** Number of transactions covered by the bundle (informational). */
+    transaction_count: z.number().int().nonnegative().optional(),
+    /** Derived anomaly counts from chain-intake's classifier. */
+    trigger_counts: chainTriggerCountsSchema.optional(),
+    /** Highest severity across all detected triggers. */
+    trigger_max_severity: chainTriggerSeveritySchema.nullable().optional(),
+    /** Known trigger kinds observed — kept separately for cheap filtering in CI. */
+    trigger_kinds: z.array(chainTriggerKindSchema).optional(),
     notes: z.string().optional(),
   })
   .refine(

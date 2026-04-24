@@ -41,16 +41,17 @@ app.post("/webhooks/helius", async (c) => {
   const pool = getPool();
   const client = await pool.connect();
   try {
-    const { inserted, skipped } = await upsertParsedTransactions(
-      client,
-      txs,
-      "webhook",
-    );
+    const { inserted, skipped, triggersInserted, triggerCounts } =
+      await upsertParsedTransactions(client, txs, "webhook");
     return c.json({
       ok: true,
       received: txs.length,
       inserted,
       skipped_duplicates: skipped,
+      triggers: {
+        inserted: triggersInserted,
+        counts: triggerCounts,
+      },
     });
   } finally {
     client.release();

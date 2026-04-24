@@ -5,22 +5,25 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "test": "node --import tsx --test \"src/__tests__/*.test.ts\""
   },
   "dependencies": {
     "@langchain/core": "^1.1.40",
     "@langchain/google-genai": "^2.1.27",
     "@langchain/langgraph": "^1.2.8",
+    "@langchain/openai": "^1.4.4",
     "@langchain/openrouter": "^0.2.2",
     "@types/better-sqlite3": "^7.6.13",
     "better-sqlite3": "^11.7.0",
+    "execa": "^9.5.1",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
-    "lowdb": "^7.0.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
+    "tsx": "^4.19.2",
     "typescript": "^6.0.2"
   }
 }

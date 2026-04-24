@@ -1,13 +1,14 @@
-export * from "./solana-rpc-read.js";
-export * from "./git-clone-repo.js";
-export * from "./git-diff-summary.js";
-export * from "./write-assurance-manifest-tool.js";
-export * from "./merge-findings-tool.js";
-export * from "./program-account-analyzer.js";
-export * from "./program-upgrade-monitor.js";
-export * from "./cpi-graph-mapper.js";
-export * from "./account-state-snapshot.js";
-export * from "./secret-scanner.js";
-export * from "./env-hygiene-check.js";
-export * from "./unified-posture-report.js";
-export * from "./generate-pdf-report-tool.js";
+/**
+ * @deprecated Import from `@ares/engine` directly.
+ *
+ * This directory used to contain the canonical implementation of the
+ * assurance tools. Ownership has moved to `packages/engine/src/assurance-tools`
+ * so that the CLI, Next.js web surface, and MCP server all share one source
+ * of truth. These files remain as thin re-exports for backward compatibility
+ * with external consumers that imported from `deepagentsjs/examples/...`.
+ *
+ * New code should use:
+ *
+ *     import { secretScannerTool } from "@ares/engine";
+ */
+export * from "@ares/engine";

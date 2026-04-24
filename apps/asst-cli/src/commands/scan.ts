@@ -8,13 +8,17 @@ import { Orchestrator } from "@ares/engine";
 import chalk from "chalk";
 import * as path from "node:path";
 
-export async function scanCommand(options: { repo?: string; json?: boolean }) {
+export async function scanCommand(options: {
+  repo?: string;
+  json?: boolean;
+  model?: string;
+}) {
   const repoRoot = options.repo ? path.resolve(options.repo) : process.cwd();
   const c = theme.c;
 
   // JSON mode — skip all TUI
   if (options.json) {
-    return runJsonScan(repoRoot);
+    return runJsonScan(repoRoot, options.model);
   }
 
   // ─── Startup Banner ────────────────────────────────────────
@@ -70,7 +74,7 @@ export async function scanCommand(options: { repo?: string; json?: boolean }) {
 
   // ─── Execute Scan ──────────────────────────────────────────
 
-  const orchestrator = new Orchestrator(repoRoot);
+  const orchestrator = new Orchestrator(repoRoot, { model: options.model });
   await orchestrator.init();
 
   const s = spinner();
@@ -166,8 +170,8 @@ export async function scanCommand(options: { repo?: string; json?: boolean }) {
 
 // ─── JSON Mode (CI/CD) ────────────────────────────────────────
 
-async function runJsonScan(repoRoot: string) {
-  const orchestrator = new Orchestrator(repoRoot);
+async function runJsonScan(repoRoot: string, model?: string) {
+  const orchestrator = new Orchestrator(repoRoot, { model });
   await orchestrator.init();
 
   const startTime = Date.now();
