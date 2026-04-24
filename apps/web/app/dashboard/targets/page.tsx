@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { 
   Plus, 
   Filter, 
@@ -12,14 +13,53 @@ import {
   History,
   Target as TargetIcon
 } from "lucide-react";
-import { mockTargets, Target } from "@/lib/ares/mock-data";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
 
 export default function TargetsPage() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [targets, setTargets] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredTargets = mockTargets.filter(t => 
+  useEffect(() => {
+    async function fetchTargets() {
+      try {
+        const res = await fetch("/api/posture");
+        const data = await res.json();
+        const resFindings = await fetch("/api/findings");
+        const findingsData = await resFindings.json();
+
+        // Infer targets from manifest and findings
+        const manifest = findingsData.manifest || {};
+        const baseTarget = {
+          id: manifest.repoRoot ? manifest.repoRoot.split('\\').pop() : 'primary-repo',
+          name: manifest.repoRoot ? manifest.repoRoot.split('\\').pop() : 'ARES Workspace',
+          type: 'repo',
+          status: data.overall > 80 ? 'protected' : 'monitoring',
+          riskScore: 100 - data.overall,
+          owner: 'System'
+        };
+
+        // Add some inferred targets from findings files
+        const fileTargets = Array.from(new Set((findingsData.findings || []).map((f: any) => f.file))).filter(Boolean).map((file: any) => ({
+          id: file,
+          name: file.split('/').pop(),
+          type: file.endsWith('.sol') || file.endsWith('.rs') ? 'contract' : 'repo',
+          status: 'monitoring',
+          riskScore: 40,
+          owner: 'Agent'
+        }));
+
+        setTargets([baseTarget, ...fileTargets]);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchTargets();
+  }, []);
+
+  const filteredTargets = targets.filter(t => 
     t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     t.type.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -128,7 +168,7 @@ export default function TargetsPage() {
   );
 }
 
-function TargetTypeIcon({ type }: { type: Target['type'] }) {
+function TargetTypeIcon({ type }: { type: string }) {
   switch (type) {
     case 'wallet': return <ShieldCheck className="w-4 h-4 text-primary" />;
     case 'contract': return <ShieldAlert className="w-4 h-4 text-emerald-500" />;
@@ -138,8 +178,8 @@ function TargetTypeIcon({ type }: { type: Target['type'] }) {
   }
 }
 
-function StatusBadge({ status }: { status: Target['status'] }) {
-  const styles = {
+function StatusBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
     protected: "bg-emerald-500/10 text-emerald-600 border-emerald-500/10",
     monitoring: "bg-blue-500/10 text-blue-600 border-blue-500/10",
     vulnerable: "bg-destructive/10 text-destructive border-destructive/10",

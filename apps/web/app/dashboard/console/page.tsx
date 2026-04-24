@@ -24,20 +24,83 @@ interface LogEntry {
 }
 
 export default function ConsolePage() {
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [inputValue, setInputValue] = useState("");
+  const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
-  const [logs, setLogs] = useState<LogEntry[]>([
-    { id: '1', source: 'Orchestrator', level: 'info', message: 'ARES System v2.5.0 Initialized. Secure buffer active.', timestamp: new Date().toISOString() },
-    { id: '2', source: 'NetworkScan', level: 'info', message: 'Boundary scan complete: 4 new endpoints identified.', timestamp: new Date().toISOString() },
-    { id: '3', source: 'SolanaAuditor', level: 'warn', message: 'Suspicious PDA pattern detected on manifest commit sha: 7f8a2...', timestamp: new Date().toISOString() },
-    { id: '4', source: 'PolicyEngine', level: 'security', message: 'Enforcing immutable lock on high-value treasury vault.', timestamp: new Date().toISOString() },
-  ]);
-
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setMounted(true);
+    fetchLogs();
+  }, []);
+
+  const fetchLogs = async () => {
+    try {
+      const res = await fetch("/api/chat");
+      const history = await res.json();
+      const mapped = history.reverse().map((h: any, i: number) => ({
+        id: i.toString(),
+        source: h.role === 'user' ? 'Operator' : 'ARES',
+        level: h.role === 'user' ? 'info' : 'security',
+        message: h.content,
+        timestamp: h.timestamp || new Date().toISOString()
+      }));
+      setLogs(mapped);
+    } catch (err) {
+      console.error("Failed to fetch logs:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
+
+  const handleCommand = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputValue.trim()) return;
+
+    const userMsg: LogEntry = {
+      id: Date.now().toString(),
+      source: 'Operator',
+      level: 'info',
+      message: inputValue,
+      timestamp: new Date().toISOString()
+    };
+
+    setLogs(prev => [...prev, userMsg]);
+    const cmd = inputValue;
+    setInputValue("");
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: cmd })
+      });
+      const data = await res.json();
+      
+      const agentMsg: LogEntry = {
+        id: (Date.now() + 1).toString(),
+        source: 'ARES',
+        level: 'security',
+        message: data.response || "Command executed successfully.",
+        timestamp: new Date().toISOString()
+      };
+      setLogs(prev => [...prev, agentMsg]);
+    } catch (err) {
+      const errMsg: LogEntry = {
+        id: (Date.now() + 1).toString(),
+        source: 'System',
+        level: 'error',
+        message: "Failed to communicate with the ARES engine.",
+        timestamp: new Date().toISOString()
+      };
+      setLogs(prev => [...prev, errMsg]);
+    }
+  };
 
   return (
     <div className="h-full flex flex-col space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-700">
@@ -84,30 +147,38 @@ export default function ConsolePage() {
                  </div>
               </div>
 
-              {/* Logs Stream */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-3 font-mono text-[14px]">
-                 {mounted && logs.map((log) => (
-                   <div key={log.id} className="flex gap-4 group">
-                      <span className="text-[#5e5d59] shrink-0 w-24">[{new Date(log.timestamp).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
-                      <span className={cn(
-                        "shrink-0 w-32 font-bold px-2 rounded",
-                        log.level === 'info' ? "text-blue-400 bg-blue-400/5" : 
-                        log.level === 'warn' ? "text-amber-400 bg-amber-400/5" : 
-                        log.level === 'security' ? "text-emerald-400 bg-emerald-400/5" : "text-rose-400 bg-rose-400/5"
-                      )}>&gt; {log.source.toUpperCase()}</span>
-                      <span className="text-[#faf9f5] leading-relaxed break-words">{log.message}</span>
-                   </div>
-                 ))}
-                 <div className="flex gap-4">
-                    <span className="text-primary animate-pulse shrink-0 w-24 border-r border-[#30302e] inline-block">_</span>
-                    <input 
-                      type="text" 
-                      placeholder="Enter command (e.g., scan --target=manifest.json)..." 
-                      className="bg-transparent border-none p-0 focus:ring-0 text-[#faf9f5] w-full placeholder:text-[#5e5d59] mt-[-2px]" 
-                    />
-                 </div>
-                 <div ref={bottomRef} />
-              </div>
+               {/* Logs Stream */}
+               <div className="flex-1 overflow-y-auto p-6 space-y-3 font-mono text-[14px]">
+                  {loading && (
+                    <div className="flex gap-4 opacity-50">
+                       <span className="text-[#5e5d59] shrink-0 w-24">[......]</span>
+                       <span className="text-primary animate-pulse">Initializing logical buffer...</span>
+                    </div>
+                  )}
+                  {mounted && logs.map((log) => (
+                    <div key={log.id} className="flex gap-4 group border-l border-transparent hover:border-primary/20 pl-2 transition-all">
+                       <span className="text-[#5e5d59] shrink-0 w-24">[{new Date(log.timestamp).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
+                       <span className={cn(
+                         "shrink-0 w-32 font-bold px-2 rounded",
+                         log.level === 'info' ? "text-blue-400 bg-blue-400/5" : 
+                         log.level === 'warn' ? "text-amber-400 bg-amber-400/5" : 
+                         log.level === 'security' ? "text-emerald-400 bg-emerald-400/5" : "text-rose-400 bg-rose-400/5"
+                       )}>&gt; {log.source.toUpperCase()}</span>
+                       <span className="text-[#faf9f5] leading-relaxed break-words flex-1">{log.message}</span>
+                    </div>
+                  ))}
+                  <form onSubmit={handleCommand} className="flex gap-4">
+                     <span className="text-primary animate-pulse shrink-0 w-24 border-r border-[#30302e] inline-block">_</span>
+                     <input 
+                       type="text"
+                       value={inputValue}
+                       onChange={(e) => setInputValue(e.target.value)}
+                       placeholder="Enter instruction for autonomous agents..." 
+                       className="bg-transparent border-none p-0 focus:ring-0 text-[#faf9f5] w-full placeholder:text-[#5e5d59] mt-[-2px]" 
+                     />
+                  </form>
+                  <div ref={bottomRef} />
+               </div>
 
               {/* Footer status */}
               <div className="px-6 py-3 border-t border-[#30302e] bg-[#1a1a18] flex items-center justify-between text-[10px] font-mono uppercase tracking-[0.2em] text-[#5e5d59]">

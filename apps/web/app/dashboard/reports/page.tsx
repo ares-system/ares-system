@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { 
   Plus, 
   Search, 
@@ -12,18 +13,47 @@ import {
   FileSearch,
   CheckCircle2,
   Clock,
-  ExternalLink
+  ExternalLink,
+  Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const mockReports = [
-  { id: 'rep-1', name: 'Q2 Sovereign Treasury Audit', type: 'compliance', date: '2026-04-20', status: 'verified', size: '2.4 MB' },
-  { id: 'rep-2', name: 'DEX Aggregator LP Risk Assessment', type: 'security_audit', date: '2026-04-18', status: 'verified', size: '1.1 MB' },
-  { id: 'rep-3', name: 'PDA Ownership Anomaly Trace', type: 'incident', date: '2026-04-15', status: 'processing', size: '—' },
-  { id: 'rep-4', name: 'Weekly System Inventory Manifest', type: 'activity', date: '2026-04-12', status: 'verified', size: '840 KB' },
-];
-
 export default function ReportsPage() {
+  const [reports, setReports] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isSynthesizing, setIsSynthesizing] = useState(false);
+
+  useEffect(() => {
+    fetchReports();
+  }, []);
+
+  const fetchReports = async () => {
+    try {
+      const res = await fetch("/api/reports");
+      const data = await res.json();
+      setReports(data);
+    } catch (err) {
+      console.error("Failed to fetch reports:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRequestSynthesis = async () => {
+    setIsSynthesizing(true);
+    try {
+      await fetch("/api/reports", { method: "POST" });
+      // Simulate synthesis starting
+      setTimeout(() => {
+        setIsSynthesizing(false);
+        fetchReports();
+      }, 3000);
+    } catch (err) {
+      console.error("Synthesis failed:", err);
+      setIsSynthesizing(false);
+    }
+  };
+
   return (
     <div className="space-y-12 animate-in fade-in slide-in-from-bottom-2 duration-700">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 overflow-hidden">
@@ -35,9 +65,13 @@ export default function ReportsPage() {
             All reports are cryptographically signed and archived as evidence trails.
           </p>
         </div>
-        <button className="flex items-center gap-2 px-5 py-2.5 bg-primary rounded-xl text-[14px] font-medium text-primary-foreground hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 shrink-0">
-          <FileText className="w-4 h-4" />
-          Request New Synthesis
+        <button 
+          onClick={handleRequestSynthesis}
+          disabled={isSynthesizing}
+          className="flex items-center gap-2 px-5 py-2.5 bg-primary rounded-xl text-[14px] font-medium text-primary-foreground hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 shrink-0 disabled:opacity-50"
+        >
+          {isSynthesizing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+          {isSynthesizing ? "Synthesizing..." : "Request New Synthesis"}
         </button>
       </div>
 
@@ -87,7 +121,21 @@ export default function ReportsPage() {
         </div>
 
         <div className="ares-card whisper-shadow divide-y divide-border overflow-hidden">
-          {mockReports.map((report) => (
+          {loading ? (
+            [1, 2, 3].map(i => (
+              <div key={i} className="p-6 bg-secondary/5 animate-pulse flex gap-6">
+                <div className="w-12 h-12 rounded-xl bg-muted" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-muted w-1/3" />
+                  <div className="h-3 bg-muted w-1/4" />
+                </div>
+              </div>
+            ))
+          ) : reports.length === 0 ? (
+            <div className="p-12 text-center text-muted-foreground italic font-serif">
+              No reports synthesized in this buffer yet.
+            </div>
+          ) : reports.map((report) => (
             <div key={report.id} className="p-6 flex flex-col md:flex-row md:items-center gap-6 group hover:bg-secondary/10 transition-colors">
               <div className="w-12 h-12 rounded-xl bg-card border border-border flex items-center justify-center shadow-sm group-hover:border-primary/20 transition-all">
                  <FileText className="w-5 h-5 text-primary" />
@@ -113,9 +161,13 @@ export default function ReportsPage() {
               <div className="flex items-center gap-2 shrink-0">
                 {report.status === 'verified' ? (
                   <>
-                    <button className="p-2.5 border border-border rounded-xl text-muted-foreground hover:text-foreground hover:bg-card hover:ring-shadow transition-all group/btn">
+                    <a 
+                      href={report.path} 
+                      download={report.id}
+                      className="p-2.5 border border-border rounded-xl text-muted-foreground hover:text-foreground hover:bg-card hover:ring-shadow transition-all group/btn"
+                    >
                       <Download className="w-4 h-4 group-hover/btn:text-primary transition-colors" />
-                    </button>
+                    </a>
                     <button className="p-2.5 border border-border rounded-xl text-muted-foreground hover:text-foreground hover:bg-card hover:ring-shadow transition-all">
                       <Share2 className="w-4 h-4" />
                     </button>

@@ -20,22 +20,65 @@ import {
   AreaChart,
   Area
 } from "recharts";
-import { mockDetections, mockTargets, mockAgents } from "@/lib/ares/mock-data";
+import { useState, useEffect } from "react";
+import { Detection, Target, Agent } from "@/lib/ares/mock-data";
 import { cn } from "@/lib/utils";
 
-const postureData = [
-  { name: "Mon", score: 82 },
-  { name: "Tue", score: 85 },
-  { name: "Wed", score: 84 },
-  { name: "Thu", score: 88 },
-  { name: "Fri", score: 91 },
-  { name: "Sat", score: 89 },
-  { name: "Sun", score: 92 },
-];
-
 export default function OverviewPage() {
-  const criticalCount = mockDetections.filter(d => d.severity === 'critical').length;
-  const protectedCount = mockTargets.filter(t => t.status === 'protected').length;
+  const [findings, setFindings] = useState<any[]>([]);
+  const [posture, setPosture] = useState<any>(null);
+  const [agents, setAgents] = useState<any[]>([]);
+  const [reports, setReports] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isScanning, setIsScanning] = useState(false);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const [findingsRes, postureRes, agentsRes, reportsRes] = await Promise.all([
+          fetch("/api/findings"),
+          fetch("/api/posture"),
+          fetch("/api/agents"),
+          fetch("/api/reports")
+        ]);
+        const findingsData = await findingsRes.json();
+        const postureData = await postureRes.json();
+        const agentsData = await agentsRes.json();
+        const reportsData = await reportsRes.json();
+        
+        setFindings(findingsData.findings || []);
+        setPosture(postureData);
+        setAgents(agentsData);
+        setReports(reportsData);
+      } catch (err) {
+        console.error("Failed to fetch dashboard data:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, []);
+
+  const handleStartScan = async () => {
+    setIsScanning(true);
+    try {
+      const res = await fetch("/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target: "." })
+      });
+      if (res.ok) {
+        alert("Security scan initiated. Check the Operator Console for real-time logs.");
+      }
+    } catch (err) {
+      console.error("Scan trigger failed:", err);
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const criticalCount = findings.filter(f => f.severity === 'Critical').length;
+  const highCount = findings.filter(f => f.severity === 'High').length;
 
   return (
     <div className="space-y-12 animate-in fade-in slide-in-from-bottom-2 duration-700">
@@ -50,7 +93,21 @@ export default function OverviewPage() {
         </div>
         <div className="flex gap-3 shrink-0">
           <button className="px-5 py-2.5 bg-secondary text-secondary-foreground rounded-xl text-[14px] font-medium hover:bg-muted transition-all ring-shadow">Generate Report</button>
-          <button className="px-5 py-2.5 bg-primary text-primary-foreground rounded-xl text-[14px] font-medium hover:opacity-90 transition-all shadow-xl shadow-primary/20">Initiate Scan</button>
+          <button 
+            onClick={handleStartScan}
+            disabled={isScanning}
+            className={cn(
+              "px-5 py-2.5 bg-primary text-primary-foreground rounded-xl text-[14px] font-medium hover:opacity-90 transition-all shadow-xl shadow-primary/20 flex items-center gap-2",
+              isScanning && "opacity-50 cursor-not-allowed"
+            )}
+          >
+            {isScanning ? (
+              <>
+                <Activity className="w-4 h-4 animate-spin" />
+                Scanning...
+              </>
+            ) : "Initiate Scan"}
+          </button>
         </div>
       </div>
 
@@ -58,27 +115,27 @@ export default function OverviewPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard 
           label="Security Posture" 
-          value="92%" 
-          trend="+4.2%" 
+          value={loading ? "..." : `${posture?.overall || 0}%`} 
+          trend={loading ? "" : posture?.grade || "F"} 
           icon={<Shield className="w-5 h-5" />} 
         />
         <StatCard 
-          label="Protected Assets" 
-          value={protectedCount.toString()} 
-          trend="0" 
+          label="Assurance Reports" 
+          value={loading ? "..." : reports.length.toString()} 
+          trend="Signed Archives" 
           icon={<TargetIcon className="w-5 h-5" />} 
         />
         <StatCard 
-          label="Critical Detections" 
-          value={criticalCount.toString()} 
-          trend="-2" 
+          label="Critical Findings" 
+          value={loading ? "..." : criticalCount.toString()} 
+          trend={`${highCount} High`} 
           isAlert={criticalCount > 0}
           icon={<AlertTriangle className="w-5 h-5" />} 
         />
         <StatCard 
-          label="Automation Rate" 
-          value="84%" 
-          trend="+1.2%" 
+          label="Automation Jobs" 
+          value={loading ? "..." : `${agents.length} Agents`} 
+          trend="Synchronized" 
           icon={<Zap className="w-5 h-5" />} 
         />
       </div>
@@ -98,7 +155,7 @@ export default function OverviewPage() {
           </div>
           <div className="h-[340px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={postureData}>
+              <AreaChart data={posture?.layers || []}>
                 <defs>
                   <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#c96442" stopOpacity={0.1}/>
@@ -110,7 +167,7 @@ export default function OverviewPage() {
                   dataKey="name" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12, fontFamily: 'var(--font-sans)' }}
+                  tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10, fontFamily: 'var(--font-sans)' }}
                   dy={15}
                 />
                 <YAxis 
@@ -152,21 +209,28 @@ export default function OverviewPage() {
           </div>
           
           <div className="space-y-3 flex-1">
-            {mockAgents.map(agent => (
-              <div key={agent.id} className="p-4 rounded-xl bg-card border border-border flex items-center gap-4 group hover:ring-shadow transition-all">
+            {findings.slice(0, 5).map((finding, idx) => (
+              <div key={idx} className="p-4 rounded-xl bg-card border border-border flex items-center gap-4 group hover:ring-shadow transition-all">
                 <div className={cn(
                   "w-2 h-2 rounded-full shrink-0",
-                  agent.status === 'running' ? "bg-primary animate-pulse" : "bg-muted-foreground/30"
+                  finding.severity === 'Critical' ? "bg-destructive animate-pulse" : 
+                  finding.severity === 'High' ? "bg-primary" : "bg-muted-foreground/30"
                 )} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-[14px] font-semibold text-foreground truncate">{agent.name}</p>
-                  <p className="text-[12px] text-muted-foreground truncate font-sans">{agent.currentTask || "Idle: Waiting for telemetry"}</p>
+                  <p className="text-[14px] font-semibold text-foreground truncate">{finding.rule}</p>
+                  <p className="text-[12px] text-muted-foreground truncate font-sans">{finding.message}</p>
                 </div>
                 <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                    <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
                 </div>
               </div>
             ))}
+            {findings.length === 0 && (
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-8 opacity-40 italic">
+                <ShieldCheck className="w-12 h-12 mb-3" />
+                <p className="text-sm">No active threats detected in latest telemetry buffers.</p>
+              </div>
+            )}
           </div>
           
           <button className="w-full py-2.5 mt-8 bg-card border border-border rounded-xl text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-all uppercase tracking-[0.15em] font-sans">

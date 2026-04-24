@@ -1,5 +1,7 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import { cn } from "@/lib/utils";
 import { 
   Plus, 
   Search, 
@@ -14,10 +16,26 @@ import {
   Zap,
   Globe
 } from "lucide-react";
-import { mockAgents } from "@/lib/ares/mock-data";
-import { cn } from "@/lib/utils";
 
 export default function AgentsPage() {
+  const [agents, setAgents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchAgents() {
+      try {
+        const res = await fetch("/api/agents");
+        const data = await res.json();
+        setAgents(data);
+      } catch (err) {
+        console.error("Failed to load agents:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchAgents();
+  }, []);
+
   return (
     <div className="space-y-12 animate-in fade-in slide-in-from-bottom-2 duration-700">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 overflow-hidden">
@@ -36,12 +54,12 @@ export default function AgentsPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {mockAgents.map((agent) => (
-          <div key={agent.id} className="ares-card whisper-shadow group hover:ring-shadow transition-all flex flex-col h-full bg-secondary/10 hover:bg-card">
+        {agents.map((agent: any) => (
+          <div key={agent.id} className="ares-card whisper-shadow group hover:ring-shadow transition-all flex flex-col h-full bg-secondary/10 hover:bg-card border border-border">
             <div className="p-8 space-y-6 flex-1">
               <div className="flex items-start justify-between">
                 <div className="w-12 h-12 rounded-2xl bg-secondary flex items-center justify-center border border-border group-hover:border-primary/20 transition-all shadow-sm">
-                   {agent.type === 'coordinator' ? <Shield className="w-6 h-6 text-primary" /> : <Cpu className="w-6 h-6 text-primary" />}
+                   {agent.name.toLowerCase().includes('coordinator') || agent.name.toLowerCase().includes('auditor') ? <Shield className="w-6 h-6 text-primary" /> : <Cpu className="w-6 h-6 text-primary" />}
                 </div>
                 <div className={cn(
                   "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border",
@@ -63,12 +81,12 @@ export default function AgentsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Success Rate</p>
-                  <p className="text-xl font-serif font-medium">{agent.successRate}%</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Stability</p>
+                  <p className="text-xl font-serif font-medium">{agent.successRate.toFixed(1)}%</p>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Intelligence</p>
-                  <p className="text-xl font-serif font-medium truncate" title={agent.model}>{agent.model.split(' ')[0]}</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Engine</p>
+                  <p className="text-xl font-serif font-medium truncate" title={agent.model}>{agent.model.split('/').pop()?.split(':')[0] || agent.model.split('-')[0]}</p>
                 </div>
               </div>
             </div>
@@ -85,16 +103,11 @@ export default function AgentsPage() {
           </div>
         ))}
 
-        {/* Placeholder for new agent capability */}
-        <div className="ares-card border-dashed border-2 flex flex-col items-center justify-center p-12 text-center space-y-4 hover:border-primary/40 hover:bg-secondary/10 transition-all cursor-pointer group">
-           <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center border border-border group-hover:scale-110 transition-transform">
-             <Plus className="w-8 h-8 text-muted-foreground" />
-           </div>
-           <div>
-             <h4 className="text-lg font-serif font-medium">Provision System</h4>
-             <p className="text-sm text-muted-foreground max-w-[200px]">Define a new autonomous behavior model from the agent laboratory.</p>
-           </div>
-        </div>
+        {loading && [1, 2, 3].map(i => (
+          <div key={i} className="ares-card p-12 flex items-center justify-center bg-secondary/10 border border-border border-dashed animate-pulse">
+            <Activity className="w-8 h-8 text-muted-foreground/20" />
+          </div>
+        ))}
       </div>
     </div>
   );
